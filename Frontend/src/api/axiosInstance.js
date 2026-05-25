@@ -6,7 +6,7 @@ const api = axios.create({
   timeout: 10000,
 })
 
-// ── Request interceptor: attach JWT ──────────────────────────────────────────
+// Auto-attach JWT to every request
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('jwt_token')
@@ -16,7 +16,7 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 
-// ── Response interceptor: handle 401 globally ────────────────────────────────
+// Auto-redirect on 401
 api.interceptors.response.use(
   (response) => response,
   (error) => {

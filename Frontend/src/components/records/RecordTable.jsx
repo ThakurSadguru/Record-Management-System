@@ -1,3 +1,4 @@
+import { useState } from "react";
 function fileIcon(mime) {
   if (!mime) return "📎";
   if (mime.startsWith("image/")) return "🖼️";
@@ -33,39 +34,98 @@ function fmt(value, type) {
 }
 
 function FileCell({ fileData }) {
+  const [preview, setPreview] = useState(false);
+
   if (!fileData || !fileData.name)
     return <span className="text-gray-300">—</span>;
+
   const isImage = fileData.type && fileData.type.startsWith("image/");
+  const isPdf = fileData.type === "application/pdf";
+
+  function handleDownload() {
+    const a = document.createElement("a");
+    a.href = fileData.dataUrl;
+    a.download = fileData.name;
+    a.click();
+  }
+
   return (
-    <div className="flex items-center gap-1.5">
-      <span>{fileIcon(fileData.type)}</span>
-      <div className="min-w-0">
-        {isImage ? (
-          <a
-            href={fileData.dataUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="text-xs text-blue-500 hover:underline truncate block max-w-[120px]"
+    <>
+      <div className="flex items-center gap-1.5">
+        <span>{fileIcon(fileData.type)}</span>
+        <div className="min-w-0">
+          <button
+            onClick={() =>
+              isImage || isPdf ? setPreview(true) : handleDownload()
+            }
+            className="text-xs text-blue-500 hover:underline truncate block max-w-[120px] text-left"
             title={fileData.name}
           >
             {fileData.name}
-          </a>
-        ) : (
-          <a
-            href={fileData.dataUrl}
-            download={fileData.name}
-            className="text-xs text-blue-500 hover:underline truncate block max-w-[120px]"
-            title={fileData.name}
-          >
-            {fileData.name}
-          </a>
-        )}
-        <div className="text-xs text-gray-400">{fmtSize(fileData.size)}</div>
+          </button>
+          <div className="text-xs text-gray-400">{fmtSize(fileData.size)}</div>
+        </div>
       </div>
-    </div>
+
+      {/* ── Popup Modal ── */}
+      {preview && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setPreview(false)} // click backdrop to close
+        >
+          <div
+            className="relative bg-white rounded-xl shadow-2xl max-w-3xl w-full mx-4 overflow-hidden"
+            onClick={(e) => e.stopPropagation()} // don't close when clicking content
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+              <div className="flex items-center gap-2 min-w-0">
+                <span>{fileIcon(fileData.type)}</span>
+                <span className="text-sm font-medium text-gray-700 truncate">
+                  {fileData.name}
+                </span>
+                <span className="text-xs text-gray-400">
+                  {fmtSize(fileData.size)}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0 ml-3">
+                <button
+                  onClick={handleDownload}
+                  className="text-xs text-blue-500 hover:underline"
+                >
+                  ⬇ Download
+                </button>
+                <button
+                  onClick={() => setPreview(false)}
+                  className="text-gray-400 hover:text-gray-700 text-xl leading-none ml-2"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="p-4 flex items-center justify-center bg-gray-50 max-h-[75vh] overflow-auto">
+              {isImage ? (
+                <img
+                  src={fileData.dataUrl}
+                  alt={fileData.name}
+                  className="max-w-full max-h-[65vh] object-contain rounded"
+                />
+              ) : isPdf ? (
+                <iframe
+                  src={fileData.dataUrl}
+                  title={fileData.name}
+                  className="w-full h-[65vh] rounded border-0"
+                />
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
-
 export default function RecordTable({
   module,
   records,

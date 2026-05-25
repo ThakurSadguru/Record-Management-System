@@ -1,8 +1,8 @@
 import api from './axiosInstance'
 
 export const recordApi = {
-  getByModule: (moduleId, page = 0, size = 20) =>
-    api.get('/records', { params: { moduleId, page, size } }).then(r => r.data),
+  getByModule: (moduleId) =>
+    api.get('/records', { params: { moduleId } }).then(r => r.data),
 
   search: (moduleId, q) =>
     api.get('/records/search', { params: { moduleId, q } }).then(r => r.data),

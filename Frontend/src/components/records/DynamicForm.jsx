@@ -13,6 +13,7 @@ export default function DynamicForm({
   const { createRecord, updateRecord } = useData();
   const [values, setValues] = useState({});
   const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     setValues(initialValues ?? {});
@@ -37,16 +38,21 @@ export default function DynamicForm({
     return errs;
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     const errs = validate();
     if (Object.keys(errs).length > 0) {
       setErrors(errs);
       return;
     }
-    if (isEdit) updateRecord(recordId, moduleId, values);
-    else createRecord(moduleId, values);
-    onSuccess?.();
+    setLoading(true);
+    try {
+      if (isEdit) await updateRecord(recordId, moduleId, values);
+      else await createRecord(moduleId, values);
+      onSuccess?.();
+    } finally {
+      setLoading(false);
+    }
   }
 
   const fullWidthTypes = new Set(["textarea", "file"]);
@@ -75,8 +81,12 @@ export default function DynamicForm({
         ))}
       </div>
       <div className="flex items-center gap-3">
-        <button type="submit" className="btn-primary">
-          {isEdit ? "Update Record" : "Save Record"}
+        <button
+          type="submit"
+          disabled={loading}
+          className="btn-primary disabled:opacity-50"
+        >
+          {loading ? "Saving…" : isEdit ? "Update Record" : "Save Record"}
         </button>
         <button type="button" onClick={onSuccess} className="btn-secondary">
           Cancel

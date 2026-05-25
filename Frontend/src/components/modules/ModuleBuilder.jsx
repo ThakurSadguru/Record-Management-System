@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useData } from "../../context/DataContext";
-import { moduleStore } from "../../data/store";
+import { moduleApi } from "../../api/moduleApi";
 
 const FIELD_TYPES = [
   { value: "text", label: "Text" },
@@ -22,7 +22,6 @@ function FieldRow({ field, index, onChange, onRemove }) {
   function update(key, val) {
     onChange(index, { ...field, [key]: val });
   }
-
   return (
     <div className="grid grid-cols-12 gap-3 items-end p-3 bg-gray-50 rounded-lg border border-gray-100">
       <div className="col-span-4">
@@ -103,16 +102,18 @@ export default function ModuleBuilder() {
 
   const [name, setName] = useState("");
   const [fields, setFields] = useState([]);
+  const [loading, setLoading] = useState(false);
 
+  // On edit — fetch from backend
   useEffect(() => {
     if (isEdit) {
-      try {
-        const m = moduleStore.getById(moduleId);
-        setName(m.name);
-        setFields(m.fields);
-      } catch {
-        navigate("/modules");
-      }
+      moduleApi
+        .getById(moduleId)
+        .then((m) => {
+          setName(m.name);
+          setFields(m.fields ?? []);
+        })
+        .catch(() => navigate("/modules"));
     }
   }, [isEdit, moduleId, navigate]);
 
@@ -122,24 +123,27 @@ export default function ModuleBuilder() {
       { id: uid(), label: "", type: "text", required: false, options: [] },
     ]);
   }
-
   function changeField(i, updated) {
     setFields((p) => p.map((f, idx) => (idx === i ? updated : f)));
   }
-
   function removeField(i) {
     setFields((p) => p.filter((_, idx) => idx !== i));
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
-    const payload = { name: name.trim(), fields };
-    if (isEdit) {
-      updateModule(moduleId, payload);
-      navigate(`/modules/${moduleId}`);
-    } else {
-      const m = createModule(payload);
-      navigate(`/modules/${m.id}`);
+    setLoading(true);
+    try {
+      const payload = { name: name.trim(), fields };
+      if (isEdit) {
+        await updateModule(moduleId, payload);
+        navigate(`/modules/${moduleId}`);
+      } else {
+        const m = await createModule(payload);
+        navigate(`/modules/${m.id}`);
+      }
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -190,7 +194,6 @@ export default function ModuleBuilder() {
               + Add Field
             </button>
           </div>
-
           {fields.length === 0 ? (
             <div className="text-center py-8 text-gray-400">
               <div className="text-3xl mb-2">⊞</div>
@@ -216,10 +219,10 @@ export default function ModuleBuilder() {
         <div className="flex items-center gap-3">
           <button
             type="submit"
-            disabled={!name.trim() || fields.length === 0}
+            disabled={loading || !name.trim() || fields.length === 0}
             className="btn-primary disabled:opacity-50"
           >
-            {isEdit ? "Save Changes" : "Create Module"}
+            {loading ? "Saving…" : isEdit ? "Save Changes" : "Create Module"}
           </button>
           <button
             type="button"
