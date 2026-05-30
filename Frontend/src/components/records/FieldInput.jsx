@@ -1,6 +1,25 @@
-export default function FieldInput({ field, value, onChange }) {
+export default function FieldInput({ field, value, onChange, isDark = false }) {
   const id = `field-${field.id}`;
-  const base = "input";
+
+  const base = {
+    width: "100%",
+    boxSizing: "border-box",
+    padding: "9px 12px",
+    borderRadius: 8,
+    fontSize: 13,
+    background: isDark ? "rgba(255,255,255,0.06)" : "#ffffff",
+    border: `1.5px solid ${isDark ? "rgba(255,255,255,0.12)" : "#e2e8f0"}`,
+    color: isDark ? "#ffffff" : "#0f172a",
+    outline: "none",
+    transition: "border-color 0.15s",
+  };
+
+  const focusIn = (e) =>
+    (e.target.style.borderColor = isDark ? "#4B9FFF" : "#2563eb");
+  const focusOut = (e) =>
+    (e.target.style.borderColor = isDark
+      ? "rgba(255,255,255,0.12)"
+      : "#e2e8f0");
 
   switch (field.type) {
     case "text":
@@ -8,10 +27,12 @@ export default function FieldInput({ field, value, onChange }) {
         <input
           id={id}
           type="text"
-          className={base}
+          style={base}
           value={value ?? ""}
           placeholder={field.label}
           onChange={(e) => onChange(field.id, e.target.value)}
+          onFocus={focusIn}
+          onBlur={focusOut}
         />
       );
 
@@ -20,7 +41,7 @@ export default function FieldInput({ field, value, onChange }) {
         <input
           id={id}
           type="number"
-          className={base}
+          style={base}
           value={value ?? ""}
           placeholder="0"
           onChange={(e) =>
@@ -29,6 +50,8 @@ export default function FieldInput({ field, value, onChange }) {
               e.target.value === "" ? "" : Number(e.target.value),
             )
           }
+          onFocus={focusIn}
+          onBlur={focusOut}
         />
       );
 
@@ -37,9 +60,11 @@ export default function FieldInput({ field, value, onChange }) {
         <input
           id={id}
           type="date"
-          className={base}
+          style={{ ...base, colorScheme: isDark ? "dark" : "light" }}
           value={value ?? ""}
           onChange={(e) => onChange(field.id, e.target.value)}
+          onFocus={focusIn}
+          onBlur={focusOut}
         />
       );
 
@@ -48,10 +73,12 @@ export default function FieldInput({ field, value, onChange }) {
         <input
           id={id}
           type="email"
-          className={base}
+          style={base}
           value={value ?? ""}
           placeholder="email@example.com"
           onChange={(e) => onChange(field.id, e.target.value)}
+          onFocus={focusIn}
+          onBlur={focusOut}
         />
       );
 
@@ -59,11 +86,13 @@ export default function FieldInput({ field, value, onChange }) {
       return (
         <textarea
           id={id}
-          className={`${base} resize-none`}
           rows={3}
+          style={{ ...base, resize: "none" }}
           value={value ?? ""}
           placeholder={field.label}
           onChange={(e) => onChange(field.id, e.target.value)}
+          onFocus={focusIn}
+          onBlur={focusOut}
         />
       );
 
@@ -71,16 +100,34 @@ export default function FieldInput({ field, value, onChange }) {
       return (
         <label
           htmlFor={id}
-          className="flex items-center gap-2 cursor-pointer mt-1"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            cursor: "pointer",
+            marginTop: 4,
+          }}
         >
           <input
             id={id}
             type="checkbox"
             checked={value === true || value === "true"}
             onChange={(e) => onChange(field.id, e.target.checked)}
-            className="w-4 h-4 rounded accent-green-600"
+            style={{
+              width: 16,
+              height: 16,
+              accentColor: "#16a34a",
+              cursor: "pointer",
+            }}
           />
-          <span className="text-sm text-gray-600">Yes</span>
+          <span
+            style={{
+              fontSize: 13,
+              color: isDark ? "rgba(255,255,255,0.7)" : "#475569",
+            }}
+          >
+            Yes
+          </span>
         </label>
       );
 
@@ -88,9 +135,11 @@ export default function FieldInput({ field, value, onChange }) {
       return (
         <select
           id={id}
-          className={base}
+          style={{ ...base, cursor: "pointer" }}
           value={value ?? ""}
           onChange={(e) => onChange(field.id, e.target.value)}
+          onFocus={focusIn}
+          onBlur={focusOut}
         >
           <option value="">Select…</option>
           {(field.options ?? []).map((o) => (
@@ -145,23 +194,61 @@ export default function FieldInput({ field, value, onChange }) {
 
       if (fileData) {
         return (
-          <div className="flex items-center gap-3 px-3 py-2.5 border border-green-200 bg-green-50 rounded-lg">
-            <span className="text-xl shrink-0">{fileIcon(fileData.type)}</span>
-            <div className="flex-1 min-w-0">
-              <div className="text-xs font-medium text-gray-800 truncate">
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              padding: "10px 14px",
+              borderRadius: 9,
+              background: isDark ? "rgba(34,197,94,0.08)" : "#f0fdf4",
+              border: `1.5px solid ${isDark ? "rgba(34,197,94,0.2)" : "#bbf7d0"}`,
+            }}
+          >
+            <span style={{ fontSize: 20, flexShrink: 0 }}>
+              {fileIcon(fileData.type)}
+            </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: isDark ? "#fff" : "#0f172a",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
                 {fileData.name}
               </div>
-              <div className="text-xs text-gray-400 mt-0.5">
+              <div
+                style={{
+                  fontSize: 11,
+                  color: isDark ? "rgba(255,255,255,0.4)" : "#64748b",
+                  marginTop: 2,
+                }}
+              >
                 {fmtSize(fileData.size)}
               </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {fileData.type && fileData.type.startsWith("image/") ? (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                flexShrink: 0,
+              }}
+            >
+              {fileData.type?.startsWith("image/") ? (
                 <a
                   href={fileData.dataUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-xs text-blue-500 hover:underline"
+                  style={{
+                    fontSize: 12,
+                    color: isDark ? "#4B9FFF" : "#2563eb",
+                    textDecoration: "underline",
+                  }}
                 >
                   View
                 </a>
@@ -169,7 +256,11 @@ export default function FieldInput({ field, value, onChange }) {
                 <a
                   href={fileData.dataUrl}
                   download={fileData.name}
-                  className="text-xs text-blue-500 hover:underline"
+                  style={{
+                    fontSize: 12,
+                    color: isDark ? "#4B9FFF" : "#2563eb",
+                    textDecoration: "underline",
+                  }}
                 >
                   Download
                 </a>
@@ -177,8 +268,23 @@ export default function FieldInput({ field, value, onChange }) {
               <button
                 type="button"
                 onClick={clearFile}
-                className="text-gray-300 hover:text-red-500 text-lg leading-none transition-colors"
                 title="Remove"
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: 20,
+                  lineHeight: 1,
+                  padding: 0,
+                  color: isDark ? "rgba(255,255,255,0.3)" : "#cbd5e1",
+                  transition: "color 0.15s",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "#ef4444")}
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.color = isDark
+                    ? "rgba(255,255,255,0.3)"
+                    : "#cbd5e1")
+                }
               >
                 ×
               </button>
@@ -190,22 +296,59 @@ export default function FieldInput({ field, value, onChange }) {
       return (
         <label
           htmlFor={id}
-          className="flex flex-col items-center justify-center gap-1.5 px-4 py-6 border-2 border-dashed border-gray-200 rounded-lg cursor-pointer hover:border-green-400 hover:bg-green-50 transition-all group"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+            padding: "28px 20px",
+            border: `2px dashed ${isDark ? "rgba(255,255,255,0.12)" : "#e2e8f0"}`,
+            borderRadius: 10,
+            cursor: "pointer",
+            background: isDark ? "rgba(255,255,255,0.02)" : "#f8fafc",
+            transition: "all 0.2s",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = isDark
+              ? "rgba(74,159,255,0.4)"
+              : "#93c5fd";
+            e.currentTarget.style.background = isDark
+              ? "rgba(74,159,255,0.05)"
+              : "#eff6ff";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = isDark
+              ? "rgba(255,255,255,0.12)"
+              : "#e2e8f0";
+            e.currentTarget.style.background = isDark
+              ? "rgba(255,255,255,0.02)"
+              : "#f8fafc";
+          }}
         >
-          <span className="text-2xl group-hover:scale-110 transition-transform">
-            📎
-          </span>
-          <span className="text-xs font-medium text-gray-500">
+          <span style={{ fontSize: 24, opacity: 0.5 }}>📎</span>
+          <span
+            style={{
+              fontSize: 12,
+              fontWeight: 600,
+              color: isDark ? "rgba(255,255,255,0.5)" : "#64748b",
+            }}
+          >
             Click to upload any file
           </span>
-          <span className="text-xs text-gray-400">
+          <span
+            style={{
+              fontSize: 11,
+              color: isDark ? "rgba(255,255,255,0.25)" : "#94a3b8",
+            }}
+          >
             PDF, image, Word, Excel, video, zip…
           </span>
           <input
             id={id}
             type="file"
             accept="*/*"
-            className="hidden"
+            style={{ display: "none" }}
             onChange={handleFile}
           />
         </label>
@@ -217,9 +360,11 @@ export default function FieldInput({ field, value, onChange }) {
         <input
           id={id}
           type="text"
-          className={base}
+          style={base}
           value={value ?? ""}
           onChange={(e) => onChange(field.id, e.target.value)}
+          onFocus={focusIn}
+          onBlur={focusOut}
         />
       );
   }

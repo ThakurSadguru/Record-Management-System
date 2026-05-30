@@ -1,5 +1,5 @@
+// moduleApi.js — module operations ONLY
 import api from './axiosInstance'
-
 export const moduleApi = {
   getAll: () =>
     api.get('/modules').then(r => r.data),

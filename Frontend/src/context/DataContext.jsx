@@ -7,7 +7,7 @@ import toast from "react-hot-toast";
 const DataContext = createContext(null);
 
 export function DataProvider({ children }) {
-  // ── Modules ──────────────────────────────────────────────
+  // ── Modules ──────────────────────────────────────────────────────────────
   const [modules, setModules] = useState([]);
   const [modulesLoaded, setModulesLoaded] = useState(false);
 
@@ -16,7 +16,7 @@ export function DataProvider({ children }) {
       const data = await moduleApi.getAll();
       setModules(data);
       setModulesLoaded(true);
-    } catch (err) {
+    } catch {
       toast.error("Failed to load modules");
     }
   }, []);
@@ -46,14 +46,21 @@ export function DataProvider({ children }) {
     toast.success("Module deleted");
   }, []);
 
-  // ── Records ───────────────────────────────────────────────
+  // ── Records ───────────────────────────────────────────────────────────────
   const [recordsMap, setRecordsMap] = useState({});
 
-  const loadRecords = useCallback(async (moduleId) => {
+  /**
+   * loadRecords(moduleId)               → loads main module records
+   * loadRecords(subModuleId, parentId)  → loads submodule records
+   *   key in recordsMap is always the first arg (moduleId or subModuleId)
+   */
+  const loadRecords = useCallback(async (moduleId, parentModuleId = null) => {
     try {
-      const data = await recordApi.getByModule(moduleId);
+      const data = parentModuleId
+        ? await recordApi.getByModule(parentModuleId, moduleId) // submodule
+        : await recordApi.getByModule(moduleId); // main module
       setRecordsMap((prev) => ({ ...prev, [moduleId]: data }));
-    } catch (err) {
+    } catch {
       toast.error("Failed to load records");
     }
   }, []);
@@ -66,15 +73,27 @@ export function DataProvider({ children }) {
     }
   }, []);
 
-  const createRecord = useCallback(async (moduleId, values) => {
-    const created = await recordApi.create(moduleId, values);
-    setRecordsMap((prev) => ({
-      ...prev,
-      [moduleId]: [...(prev[moduleId] ?? []), created],
-    }));
-    toast.success("Record saved!");
-    return created;
-  }, []);
+  /**
+   * createRecord(moduleId, values)                      → main module record
+   * createRecord(moduleId, values, subModuleId)         → submodule record
+   *   recordsMap key = subModuleId when subModuleId provided, else moduleId
+   */
+  const createRecord = useCallback(
+    async (moduleId, values, subModuleId = null) => {
+      const created = subModuleId
+        ? await recordApi.createSubModule(moduleId, subModuleId, values)
+        : await recordApi.create(moduleId, values);
+
+      const key = subModuleId ?? moduleId;
+      setRecordsMap((prev) => ({
+        ...prev,
+        [key]: [...(prev[key] ?? []), created],
+      }));
+      toast.success("Record saved!");
+      return created;
+    },
+    [],
+  );
 
   const updateRecord = useCallback(async (id, moduleId, values) => {
     const updated = await recordApi.update(id, values);
@@ -97,14 +116,14 @@ export function DataProvider({ children }) {
     toast.success("Record deleted");
   }, []);
 
-  // ── Users ─────────────────────────────────────────────────
+  // ── Users ─────────────────────────────────────────────────────────────────
   const [users, setUsers] = useState([]);
 
   const loadUsers = useCallback(async () => {
     try {
       const data = await userApi.getAll();
       setUsers(data);
-    } catch (err) {
+    } catch {
       toast.error("Failed to load users");
     }
   }, []);
@@ -121,25 +140,36 @@ export function DataProvider({ children }) {
     toast.success("User removed");
   }, []);
 
+  const createUser = useCallback(async (data) => {
+    const created = await userApi.create(data);
+    setUsers((prev) => [...prev, created]);
+    toast.success("User created!");
+    return created;
+  }, []);
+
   return (
     <DataContext.Provider
       value={{
+        // modules
         modules,
         modulesLoaded,
         loadModules,
         createModule,
         updateModule,
         deleteModule,
+        // records
         recordsMap,
         loadRecords,
         searchRecords,
         createRecord,
         updateRecord,
         deleteRecord,
+        // users
         users,
         loadUsers,
         updateUser,
         deleteUser,
+        createUser,
       }}
     >
       {children}
