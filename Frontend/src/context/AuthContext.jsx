@@ -10,7 +10,9 @@ export function AuthProvider({ children }) {
 
   const [user, setUser] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem("rms_user"));
+      const stored = localStorage.getItem("rms_user");
+      console.log("Stored user:", stored); // ← add this
+      return stored ? JSON.parse(stored) : null;
     } catch {
       return null;
     }
@@ -40,13 +42,14 @@ export function AuthProvider({ children }) {
     navigate("/login");
   }, [navigate]);
 
-  const isAdmin = user?.role === "ADMIN";
-  const isStaff = user?.role === "STAFF" || user?.role === "ADMIN";
+  const isSuperAdmin = user?.role === "SUPER_ADMIN";
+  const isAdmin = user?.role === "ADMIN" || isSuperAdmin;
+  const isStaff = user?.role === "STAFF" || isAdmin;
   const isViewer = !!user;
 
   return (
     <AuthContext.Provider
-      value={{ user, login, logout, isAdmin, isStaff, isViewer }}
+      value={{ user, login, logout, isSuperAdmin, isAdmin, isStaff, isViewer }}
     >
       {children}
     </AuthContext.Provider>

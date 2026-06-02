@@ -23,7 +23,7 @@ function Logo({ size = 38 }) {
 }
 
 export default function Sidebar() {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, isAdmin, isSuperAdmin } = useAuth();
   const { modules, loadModules } = useData();
   const { isDark, toggleTheme } = useTheme();
 
@@ -287,6 +287,10 @@ export default function Sidebar() {
         <div style={{ marginTop: 8 }}>
           <NavRow to="/modules" icon="☰" label="All Modules" />
           {isAdmin && <NavRow to="/users" icon="👥" label="Users" />}
+          {/* In Sidebar.jsx — after the Users NavRow */}
+          {(isAdmin || isSuperAdmin) && (
+            <NavRow to="/activity" icon="📊" label="Activity" />
+          )}
         </div>
 
         {/* ── Recycle Bin — admin only ── */}
@@ -455,15 +459,21 @@ export default function Sidebar() {
           >
             {user?.name}
           </div>
+
           <div
             style={{
               fontSize: 11,
-              color: t.userRole,
+              color: user?.role === "SUPER_ADMIN" ? "#fbbf24" : t.userRole,
               textTransform: "capitalize",
               transition: "color 0.3s",
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
             }}
           >
-            {user?.role?.toLowerCase()}
+            {user?.role === "SUPER_ADMIN"
+              ? "⭐ Super Admin"
+              : user?.role?.toLowerCase()}
           </div>
         </div>
         <button

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import logoSrc from "../assets/logo.png";
+import ForgotPasswordModal from "./ForgetPasswordModal";
 
 function Logo({ size = 38 }) {
   return (
@@ -20,6 +21,7 @@ function Logo({ size = 38 }) {
 }
 
 const ROLES = [
+  { value: "SuperAdmin", label: "Super Admin", icon: "⭐" },
   { value: "Admin", label: "Admin", icon: "👑" },
   { value: "Staff", label: "Staff", icon: "👤" },
   { value: "Viewer", label: "Viewer", icon: "👁️" },
@@ -62,8 +64,9 @@ export default function Login() {
   const [selectedRole, setSelectedRole] = useState(ROLES[0]);
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
   const [showLoginForm, setShowLoginForm] = useState(false);
-  const [showNavDropdown, setShowNavDropdown] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [remember, setRemember] = useState(false);
+  const [showNavDropdown, setShowNavDropdown] = useState(false);
   const navDropdownRef = useRef(null);
   const roleDropdownRef = useRef(null);
 
@@ -105,6 +108,11 @@ export default function Login() {
         position: "relative",
       }}
     >
+      {/* Forgot Password Modal */}
+      {showForgotPassword && (
+        <ForgotPasswordModal onClose={() => setShowForgotPassword(false)} />
+      )}
+
       {/* Grid bg */}
       <div
         style={{
@@ -146,7 +154,7 @@ export default function Login() {
         }}
       />
 
-      {/* ── NAVBAR ── */}
+      {/* Navbar */}
       <nav
         style={{
           position: "relative",
@@ -155,24 +163,22 @@ export default function Login() {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: "0 52px" /* ← was "0 48px" */,
-          height: 70 /* ← was 64 */,
+          padding: "0 52px",
+          height: 70,
           background: "rgba(5,13,31,0.85)",
           backdropFilter: "blur(20px)",
           borderBottom: "1px solid rgba(74,159,255,0.12)",
         }}
       >
-        {/* Brand */}
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          {/* ← was gap: 10 */}
-          <Logo size={52} /> {/* ← was 42 */}
+          <Logo size={52} />
           <div>
             <div style={{ fontWeight: 800, fontSize: 20, letterSpacing: 1 }}>
-              RMS {/* ← was fontSize: 17 */}
+              RMS
             </div>
             <div
               style={{
-                fontSize: 10.5 /* ← was 9 */,
+                fontSize: 10.5,
                 color: "rgba(255,255,255,0.4)",
                 letterSpacing: 1.8,
                 textTransform: "uppercase",
@@ -183,17 +189,14 @@ export default function Login() {
             </div>
           </div>
         </div>
-
-        {/* Nav links + Login */}
         <div style={{ display: "flex", alignItems: "center", gap: 35 }}>
-          {/* ← was gap: 32 */}
           {["Features", "Solutions", "Pricing", "About Us"].map((item) => (
             <a
               key={item}
               href="#"
               style={{
                 color: "rgba(255,255,255,0.7)",
-                fontSize: 15 /* ← was 13 */,
+                fontSize: 15,
                 fontWeight: 500,
                 textDecoration: "none",
               }}
@@ -205,13 +208,11 @@ export default function Login() {
               {item}
             </a>
           ))}
-
-          {/* Login split button */}
           <div ref={navDropdownRef} style={{ position: "relative" }}>
             <div
               style={{
                 display: "flex",
-                borderRadius: 9 /* ← was 8 */,
+                borderRadius: 9,
                 overflow: "hidden",
                 boxShadow: "0 0 20px rgba(74,159,255,0.3)",
               }}
@@ -225,9 +226,9 @@ export default function Login() {
                   background: "linear-gradient(135deg,#2563eb,#1d4ed8)",
                   color: "#fff",
                   border: "none",
-                  padding: "10px 26px" /* ← was "8px 20px" */,
+                  padding: "10px 26px",
                   fontWeight: 600,
-                  fontSize: 15 /* ← was 13 */,
+                  fontSize: 15,
                   cursor: "pointer",
                 }}
               >
@@ -240,7 +241,7 @@ export default function Login() {
                   color: "#fff",
                   border: "none",
                   borderLeft: "1px solid rgba(255,255,255,0.15)",
-                  padding: "10px 12px" /* ← was "8px 10px" */,
+                  padding: "10px 12px",
                   cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
@@ -258,12 +259,11 @@ export default function Login() {
                 </svg>
               </button>
             </div>
-            {/* dropdown unchanged */}
           </div>
         </div>
       </nav>
 
-      {/* ── MIDDLE: Hero + Dashboard/Form (flex:1 fills space between nav and footer) ── */}
+      {/* Middle */}
       <div
         style={{
           position: "relative",
@@ -276,7 +276,7 @@ export default function Login() {
           minHeight: 0,
         }}
       >
-        {/* LEFT — Hero */}
+        {/* Left: Hero */}
         <div
           style={{
             flex: "0 0 480px",
@@ -389,7 +389,7 @@ export default function Login() {
           </div>
         </div>
 
-        {/* RIGHT — Login form or Dashboard preview */}
+        {/* Right: Login form or Dashboard preview */}
         <div
           style={{
             flex: 1,
@@ -400,7 +400,6 @@ export default function Login() {
           }}
         >
           {showLoginForm ? (
-            /* ── LOGIN FORM (compact) ── */
             <div
               style={{
                 width: "100%",
@@ -441,117 +440,9 @@ export default function Login() {
               </div>
 
               <form onSubmit={handleSubmit}>
-                {/* Role */}
-                <div style={{ marginBottom: 13 }}>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: 12,
-                      fontWeight: 500,
-                      color: "rgba(255,255,255,0.7)",
-                      marginBottom: 5,
-                    }}
-                  >
-                    Login as
-                  </label>
-                  <div ref={roleDropdownRef} style={{ position: "relative" }}>
-                    <button
-                      type="button"
-                      onClick={() => setShowRoleDropdown((p) => !p)}
-                      style={{
-                        width: "100%",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        padding: "9px 13px",
-                        borderRadius: 8,
-                        cursor: "pointer",
-                        background: "rgba(255,255,255,0.06)",
-                        border: "1px solid rgba(74,159,255,0.25)",
-                        color: "#fff",
-                        fontSize: 13,
-                        fontWeight: 500,
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                        }}
-                      >
-                        <span style={{ fontSize: 15 }}>
-                          {selectedRole.icon}
-                        </span>
-                        <span>{selectedRole.label}</span>
-                      </div>
-                      <svg
-                        width="13"
-                        height="13"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="rgba(255,255,255,0.5)"
-                        strokeWidth="2"
-                      >
-                        <polyline points="6 9 12 15 18 9" />
-                      </svg>
-                    </button>
-                    {showRoleDropdown && (
-                      <div
-                        style={{
-                          position: "absolute",
-                          top: "calc(100% + 5px)",
-                          left: 0,
-                          right: 0,
-                          background: "rgba(10,20,45,0.99)",
-                          backdropFilter: "blur(20px)",
-                          border: "1px solid rgba(74,159,255,0.2)",
-                          borderRadius: 8,
-                          padding: 5,
-                          zIndex: 300,
-                          boxShadow: "0 20px 50px rgba(0,0,0,0.5)",
-                        }}
-                      >
-                        {ROLES.map((role) => (
-                          <button
-                            key={role.value}
-                            type="button"
-                            onClick={() => {
-                              setSelectedRole(role);
-                              setShowRoleDropdown(false);
-                            }}
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 8,
-                              width: "100%",
-                              padding: "8px 11px",
-                              borderRadius: 6,
-                              border: "none",
-                              cursor: "pointer",
-                              background:
-                                role.value === selectedRole.value
-                                  ? "rgba(74,159,255,0.15)"
-                                  : "transparent",
-                              color:
-                                role.value === selectedRole.value
-                                  ? "#4B9FFF"
-                                  : "rgba(255,255,255,0.8)",
-                              fontSize: 13,
-                              fontWeight: 500,
-                              textAlign: "left",
-                            }}
-                          >
-                            <span style={{ fontSize: 14 }}>{role.icon}</span>
-                            {role.label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
+                {/* Role selector */}
 
-                {/* Username */}
+                {/* Email */}
                 <div style={{ marginBottom: 11 }}>
                   <label
                     style={{
@@ -764,17 +655,27 @@ export default function Login() {
                     />
                     Remember me
                   </label>
-                  <a
-                    href="#"
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotPassword(true)}
                     style={{
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
                       fontSize: 12,
                       color: "#4B9FFF",
-                      textDecoration: "none",
                       fontWeight: 500,
+                      padding: 0,
                     }}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.textDecoration = "underline")
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.textDecoration = "none")
+                    }
                   >
                     Forgot Password?
-                  </a>
+                  </button>
                 </div>
 
                 <button
@@ -822,7 +723,7 @@ export default function Login() {
               </form>
             </div>
           ) : (
-            /* ── DASHBOARD PREVIEW ── */
+            /* Dashboard preview */
             <div
               style={{
                 width: "100%",
@@ -846,17 +747,8 @@ export default function Login() {
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ width: 30, height: 30 }}>
-                    {" "}
-                    {/* was 24 */}
-                    <Logo size={30} />
-                  </div>
+                  <Logo size={30} />
                   <span style={{ fontWeight: 700, fontSize: 14 }}>RMS</span>
-                  <span
-                    style={{ marginLeft: 6, color: "rgba(255,255,255,0.3)" }}
-                  >
-                    ☰
-                  </span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                   <span style={{ color: "rgba(255,255,255,0.4)" }}>🔍</span>
@@ -878,7 +770,6 @@ export default function Login() {
                   </div>
                 </div>
               </div>
-
               <div style={{ display: "flex", height: 420 }}>
                 <div
                   style={{
@@ -887,7 +778,6 @@ export default function Login() {
                     borderRight: "1px solid rgba(74,159,255,0.08)",
                     padding: "14px 0",
                     flexShrink: 0,
-                    position: "relative",
                   }}
                 >
                   {[
@@ -916,7 +806,6 @@ export default function Login() {
                           : "rgba(255,255,255,0.5)",
                         fontSize: 11,
                         fontWeight: item.active ? 600 : 400,
-                        cursor: "pointer",
                         borderLeft: item.active
                           ? "2px solid #4B9FFF"
                           : "2px solid transparent",
@@ -926,25 +815,7 @@ export default function Login() {
                       <span>{item.label}</span>
                     </div>
                   ))}
-                  <div
-                    style={{
-                      position: "absolute",
-                      bottom: 16,
-                      left: 0,
-                      width: 150,
-                      padding: "9px 16px",
-                      color: "rgba(255,255,255,0.3)",
-                      fontSize: 11,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                    }}
-                  >
-                    <span>❓</span>
-                    <span>Help & Support</span>
-                  </div>
                 </div>
-
                 <div
                   style={{ flex: 1, padding: "18px 20px", overflowY: "auto" }}
                 >
@@ -1020,120 +891,6 @@ export default function Login() {
                       </div>
                     ))}
                   </div>
-                  <div
-                    style={{
-                      background: "rgba(255,255,255,0.03)",
-                      borderRadius: 9,
-                      border: "1px solid rgba(255,255,255,0.07)",
-                      overflow: "hidden",
-                    }}
-                  >
-                    <div
-                      style={{
-                        padding: "10px 14px",
-                        fontWeight: 600,
-                        fontSize: 12,
-                        borderBottom: "1px solid rgba(255,255,255,0.07)",
-                      }}
-                    >
-                      Recent Records
-                    </div>
-                    <table
-                      style={{
-                        width: "100%",
-                        borderCollapse: "collapse",
-                        fontSize: 11,
-                      }}
-                    >
-                      <thead>
-                        <tr
-                          style={{
-                            borderBottom: "1px solid rgba(255,255,255,0.07)",
-                          }}
-                        >
-                          {["Name", "Module", "Updated By", "Updated At"].map(
-                            (h) => (
-                              <th
-                                key={h}
-                                style={{
-                                  padding: "7px 14px",
-                                  textAlign: "left",
-                                  color: "rgba(255,255,255,0.4)",
-                                  fontWeight: 500,
-                                }}
-                              >
-                                {h}
-                              </th>
-                            ),
-                          )}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {[
-                          [
-                            "Employee Onboarding",
-                            "HR Records",
-                            "Admin",
-                            "2 min ago",
-                          ],
-                          [
-                            "Inventory List",
-                            "Inventory",
-                            "John Doe",
-                            "15 min ago",
-                          ],
-                          [
-                            "Student Details",
-                            "Academics",
-                            "Sarah Smith",
-                            "1 hr ago",
-                          ],
-                          [
-                            "Project Documents",
-                            "Projects",
-                            "Michael Lee",
-                            "3 hr ago",
-                          ],
-                          ["Leave Requests", "HR Records", "Admin", "5 hr ago"],
-                        ].map((row, i) => (
-                          <tr
-                            key={i}
-                            style={{
-                              borderBottom: "1px solid rgba(255,255,255,0.04)",
-                            }}
-                          >
-                            {row.map((cell, j) => (
-                              <td
-                                key={j}
-                                style={{
-                                  padding: "8px 14px",
-                                  color:
-                                    j === 3
-                                      ? "rgba(255,255,255,0.4)"
-                                      : "rgba(255,255,255,0.8)",
-                                }}
-                              >
-                                {cell}
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    <div style={{ padding: "8px 14px" }}>
-                      <a
-                        href="#"
-                        style={{
-                          color: "#4B9FFF",
-                          fontSize: 11,
-                          textDecoration: "none",
-                          fontWeight: 500,
-                        }}
-                      >
-                        View All Records →
-                      </a>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
@@ -1141,7 +898,7 @@ export default function Login() {
         </div>
       </div>
 
-      {/* ── FEATURE BAR — pinned at bottom ── */}
+      {/* Feature bar */}
       <div
         style={{
           position: "relative",

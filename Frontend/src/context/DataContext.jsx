@@ -140,11 +140,9 @@ export function DataProvider({ children }) {
     toast.success("User removed");
   }, []);
 
-  const createUser = useCallback(async (data) => {
-    const created = await userApi.create(data);
-    setUsers((prev) => [...prev, created]);
-    toast.success("User created!");
-    return created;
+  const sendInvite = useCallback(async (data) => {
+    await userApi.sendInvite(data);
+    toast.success(`Invite sent to ${data.email}!`);
   }, []);
 
   return (
@@ -169,7 +167,7 @@ export function DataProvider({ children }) {
         loadUsers,
         updateUser,
         deleteUser,
-        createUser,
+        sendInvite,
       }}
     >
       {children}

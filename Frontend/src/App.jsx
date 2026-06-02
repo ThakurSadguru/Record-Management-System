@@ -11,6 +11,8 @@ import ModuleDetail from "./components/modules/ModuleDetail";
 import UserManagement from "./components/users/UserManagement";
 import NotFound from "./pages/NotFound";
 import RecycleBin from "./pages/RecycleBin";
+import AcceptInvite from "./pages/AcceptInvite";
+import RecentActivity from "./pages/RecentActivity";
 
 export default function App() {
   return (
@@ -18,6 +20,7 @@ export default function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/accept-invite" element={<AcceptInvite />} />
 
           <Route element={<ProtectedRoute />}>
             {/* DataProvider only mounts when user is logged in */}
@@ -38,6 +41,7 @@ export default function App() {
                 element={<ModuleBuilder />}
               />
               <Route path="/users" element={<UserManagement />} />
+              <Route path="/activity" element={<RecentActivity />} />
               <Route path="/recycle-bin" element={<RecycleBin />} />
             </Route>
           </Route>

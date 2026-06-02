@@ -3,9 +3,14 @@ import { useData } from "../../context/DataContext";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../layout/AppLayout";
 
-const ROLES = ["ADMIN", "STAFF", "VIEWER"];
+const ROLES = ["SUPER_ADMIN", "ADMIN", "STAFF", "VIEWER"];
 
 const roleStyle = {
+  SUPER_ADMIN: {
+    bg: "rgba(251,191,36,0.15)",
+    text: "#fbbf24",
+    border: "rgba(251,191,36,0.3)",
+  },
   ADMIN: {
     bg: "rgba(167,139,250,0.15)",
     text: "#a78bfa",
@@ -43,11 +48,10 @@ function RoleBadge({ role }) {
 }
 
 // ── Create User Modal ─────────────────────────────────────────────────────────
-function CreateUserModal({ isDark, onClose, onCreate }) {
+function CreateUserModal({ isDark, onClose, onCreate, isSuperAdmin }) {
   const [form, setForm] = useState({
     name: "",
     email: "",
-    password: "",
     role: "STAFF",
   });
   const [loading, setLoading] = useState(false);
@@ -99,7 +103,7 @@ function CreateUserModal({ isDark, onClose, onCreate }) {
     if (!form.name.trim()) e.name = "Name is required";
     if (!form.email.trim()) e.email = "Email is required";
     else if (!/\S+@\S+\.\S+/.test(form.email)) e.email = "Invalid email";
-    if (form.password.length < 6) e.password = "Min 6 characters";
+
     return e;
   }
 
@@ -192,7 +196,6 @@ function CreateUserModal({ isDark, onClose, onCreate }) {
         <form onSubmit={handleSubmit}>
           {field("name", "text", "Full name")}
           {field("email", "email", "user@example.com")}
-          {field("password", "password", "Min 6 characters")}
 
           <div style={{ marginBottom: 20 }}>
             <label style={label}>Role</label>
@@ -201,7 +204,9 @@ function CreateUserModal({ isDark, onClose, onCreate }) {
               onChange={(e) => setForm((p) => ({ ...p, role: e.target.value }))}
               style={input}
             >
-              {ROLES.map((r) => (
+              {ROLES.filter((r) =>
+                isSuperAdmin ? true : r !== "SUPER_ADMIN" && r !== "ADMIN",
+              ).map((r) => (
                 <option key={r} value={r}>
                   {r}
                 </option>
@@ -259,6 +264,7 @@ function CreateUserModal({ isDark, onClose, onCreate }) {
 function EditUserModal({ user, isDark, onClose, onSave }) {
   const [form, setForm] = useState({ name: user.name, role: user.role });
   const [loading, setLoading] = useState(false);
+  const { isSuperAdmin } = useAuth();
 
   const overlay = {
     position: "fixed",
@@ -384,7 +390,9 @@ function EditUserModal({ user, isDark, onClose, onSave }) {
               onChange={(e) => setForm((p) => ({ ...p, role: e.target.value }))}
               style={input}
             >
-              {ROLES.map((r) => (
+              {ROLES.filter((r) =>
+                isSuperAdmin ? true : r !== "SUPER_ADMIN" && r !== "ADMIN",
+              ).map((r) => (
                 <option key={r} value={r}>
                   {r}
                 </option>
@@ -440,9 +448,9 @@ function EditUserModal({ user, isDark, onClose, onSave }) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function UserManagement() {
-  const { user: me } = useAuth();
+  const { user: me, isSuperAdmin } = useAuth();
   const { isDark } = useTheme();
-  const { users, loadUsers, createUser, updateUser, deleteUser } = useData();
+  const { users, loadUsers, sendInvite, updateUser, deleteUser } = useData();
 
   const [showCreate, setShowCreate] = useState(false);
   const [editUser, setEditUser] = useState(null);
@@ -501,7 +509,8 @@ export default function UserManagement() {
         <CreateUserModal
           isDark={isDark}
           onClose={() => setShowCreate(false)}
-          onCreate={createUser}
+          onCreate={sendInvite}
+          isSuperAdmin={isSuperAdmin}
         />
       )}
       {editUser && (
