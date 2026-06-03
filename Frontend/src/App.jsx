@@ -13,6 +13,10 @@ import NotFound from "./pages/NotFound";
 import RecycleBin from "./pages/RecycleBin";
 import AcceptInvite from "./pages/AcceptInvite";
 import RecentActivity from "./pages/RecentActivity";
+import FeaturesPage from "./pages/FeaturesPage";
+import SolutionsPage from "./pages/SolutionsPage";
+import PricingPage from "./pages/PricingPage";
+import AboutPage from "./pages/AboutPage";
 
 export default function App() {
   return (
@@ -21,7 +25,10 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/accept-invite" element={<AcceptInvite />} />
-
+          <Route path="/features" element={<FeaturesPage />} />
+          <Route path="/solutions" element={<SolutionsPage />} />
+          <Route path="/pricing" element={<PricingPage />} />
+          <Route path="/about" element={<AboutPage />} />
           <Route element={<ProtectedRoute />}>
             {/* DataProvider only mounts when user is logged in */}
             <Route

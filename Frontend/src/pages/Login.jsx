@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import logoSrc from "../assets/logo.png";
 import ForgotPasswordModal from "./ForgetPasswordModal";
+import { useNavigate } from "react-router-dom";
 
 function Logo({ size = 38 }) {
   return (
@@ -69,6 +70,7 @@ export default function Login() {
   const [showNavDropdown, setShowNavDropdown] = useState(false);
   const navDropdownRef = useRef(null);
   const roleDropdownRef = useRef(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     function handleClick(e) {
@@ -190,23 +192,30 @@ export default function Login() {
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 35 }}>
-          {["Features", "Solutions", "Pricing", "About Us"].map((item) => (
-            <a
-              key={item}
-              href="#"
+          {[
+            { label: "Features", path: "/features" },
+            { label: "Solutions", path: "/solutions" },
+            { label: "Pricing", path: "/pricing" },
+            { label: "About Us", path: "/about" },
+          ].map((item) => (
+            <button
+              key={item.label}
+              onClick={() => navigate(item.path)}
               style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
                 color: "rgba(255,255,255,0.7)",
                 fontSize: 15,
                 fontWeight: 500,
-                textDecoration: "none",
               }}
-              onMouseEnter={(e) => (e.target.style.color = "#fff")}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "#fff")}
               onMouseLeave={(e) =>
-                (e.target.style.color = "rgba(255,255,255,0.7)")
+                (e.currentTarget.style.color = "rgba(255,255,255,0.7)")
               }
             >
-              {item}
-            </a>
+              {item.label}
+            </button>
           ))}
           <div ref={navDropdownRef} style={{ position: "relative" }}>
             <div
