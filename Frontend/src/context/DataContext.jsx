@@ -54,12 +54,16 @@ export function DataProvider({ children }) {
    * loadRecords(subModuleId, parentId)  → loads submodule records
    *   key in recordsMap is always the first arg (moduleId or subModuleId)
    */
-  const loadRecords = useCallback(async (moduleId, parentModuleId = null) => {
+  const loadRecords = useCallback(async (moduleId, subModuleId = null) => {
     try {
-      const data = parentModuleId
-        ? await recordApi.getByModule(parentModuleId, moduleId) // submodule
-        : await recordApi.getByModule(moduleId); // main module
-      setRecordsMap((prev) => ({ ...prev, [moduleId]: data }));
+      const data = await recordApi.getByModule(moduleId, subModuleId);
+
+      const key = subModuleId ?? moduleId;
+
+      setRecordsMap((prev) => ({
+        ...prev,
+        [key]: data,
+      }));
     } catch {
       toast.error("Failed to load records");
     }
@@ -71,6 +75,10 @@ export function DataProvider({ children }) {
     } catch {
       return [];
     }
+  }, []);
+
+  const filterRecords = useCallback(async (moduleId, subModuleId, q) => {
+    return await recordApi.filter(moduleId, subModuleId, q);
   }, []);
 
   /**
@@ -168,6 +176,7 @@ export function DataProvider({ children }) {
         updateUser,
         deleteUser,
         sendInvite,
+        filterRecords,
       }}
     >
       {children}

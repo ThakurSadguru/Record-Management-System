@@ -21,4 +21,13 @@ export const recordApi = {
 
   delete: (id) =>
     api.delete(`/records/${id}`),
+
+  filter: (moduleId, subModuleId, q) =>
+  api.get("/records/filter", {
+    params: {
+      moduleId,
+      subModuleId,
+      q,
+    },
+  }).then((r) => r.data),
 }

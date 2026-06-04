@@ -75,7 +75,6 @@ function StatCard({ label, value, icon, color, isDark, delay = 0 }) {
     },
   };
   const p = palette[color] || palette.blue;
-
   return (
     <div
       style={{
@@ -90,7 +89,6 @@ function StatCard({ label, value, icon, color, isDark, delay = 0 }) {
         animation: `fadeSlideUp 0.5s ease ${delay}ms both`,
       }}
     >
-      {/* Subtle corner glow */}
       <div
         style={{
           position: "absolute",
@@ -104,7 +102,6 @@ function StatCard({ label, value, icon, color, isDark, delay = 0 }) {
           pointerEvents: "none",
         }}
       />
-
       <div
         style={{
           display: "flex",
@@ -138,7 +135,6 @@ function StatCard({ label, value, icon, color, isDark, delay = 0 }) {
           }}
         />
       </div>
-
       <div
         style={{
           fontSize: 28,
@@ -177,7 +173,6 @@ function ModuleCard({ module, isDark, index }) {
     ["#06b6d4", "#0e7490"],
   ];
   const [c1, c2] = avatarColors[index % avatarColors.length];
-
   return (
     <Link to={`/modules/${module.id}`} style={{ textDecoration: "none" }}>
       <div
@@ -198,8 +193,8 @@ function ModuleCard({ module, isDark, index }) {
         onMouseEnter={(e) => {
           e.currentTarget.style.transform = "translateY(-3px)";
           e.currentTarget.style.boxShadow = isDark
-            ? `0 12px 40px rgba(0,0,0,0.3)`
-            : `0 12px 32px rgba(37,99,235,0.14)`;
+            ? "0 12px 40px rgba(0,0,0,0.3)"
+            : "0 12px 32px rgba(37,99,235,0.14)";
           e.currentTarget.style.borderColor = isDark
             ? "rgba(255,255,255,0.16)"
             : "#bfdbfe";
@@ -214,7 +209,6 @@ function ModuleCard({ module, isDark, index }) {
             : "#e8f0fe";
         }}
       >
-        {/* Top row */}
         <div
           style={{
             display: "flex",
@@ -238,7 +232,7 @@ function ModuleCard({ module, isDark, index }) {
               boxShadow: `0 4px 12px ${c1}55`,
             }}
           >
-            {module.name[0].toUpperCase()}
+            {module?.name?.[0]?.toUpperCase() || "M"}
           </div>
           <span
             style={{
@@ -255,8 +249,6 @@ function ModuleCard({ module, isDark, index }) {
             View →
           </span>
         </div>
-
-        {/* Name */}
         <div
           style={{
             fontWeight: 700,
@@ -268,8 +260,6 @@ function ModuleCard({ module, isDark, index }) {
         >
           {module.name}
         </div>
-
-        {/* Footer */}
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <div
             style={{
@@ -311,8 +301,6 @@ function ModuleCard({ module, isDark, index }) {
             </>
           )}
         </div>
-
-        {/* Hover shine */}
         <div
           style={{
             position: "absolute",
@@ -405,18 +393,511 @@ function QuickAction({ to, icon, label, desc, color, isDark }) {
   );
 }
 
+// ── Global Search Section ─────────────────────────────────────────────────────
+function GlobalSearch({ modules, filterRecords, isDark }) {
+  const [selectedModule, setSelectedModule] = useState("");
+  const [selectedSubModule, setSelectedSubModule] = useState("");
+  const [searchText, setSearchText] = useState("");
+  const [results, setResults] = useState([]);
+  const [searched, setSearched] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const currentModule = modules.find((m) => m.id === selectedModule);
+
+  const cardBg = isDark ? "rgba(255,255,255,0.03)" : "#ffffff";
+  const cardBorder = isDark ? "rgba(255,255,255,0.07)" : "#e8f0fe";
+  const inputStyle = {
+    padding: "9px 12px",
+    borderRadius: 8,
+    fontSize: 13,
+    background: isDark ? "rgba(255,255,255,0.06)" : "#fff",
+    border: `1.5px solid ${isDark ? "rgba(255,255,255,0.12)" : "#e2e8f0"}`,
+    color: isDark ? "#fff" : "#0f172a",
+    outline: "none",
+    width: "100%",
+    boxSizing: "border-box",
+  };
+
+  async function handleSearch() {
+    // Validate: module must be selected
+    if (!selectedModule) {
+      setError("Please select a module first.");
+      return;
+    }
+    if (!searchText.trim()) {
+      setError("Please enter a search term.");
+      return;
+    }
+    setError("");
+    setLoading(true);
+    try {
+      const data = await filterRecords(
+        selectedModule,
+        selectedSubModule || null,
+        searchText.trim(),
+      );
+      setResults(data);
+      setSearched(true);
+    } catch (err) {
+      console.error(err);
+      setError("Search failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleClear() {
+    setSelectedModule("");
+    setSelectedSubModule("");
+    setSearchText("");
+    setResults([]);
+    setSearched(false);
+    setError("");
+  }
+
+  return (
+    <div
+      style={{
+        background: cardBg,
+        border: `1px solid ${cardBorder}`,
+        borderRadius: 16,
+        padding: 20,
+        marginBottom: 24,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 14,
+        }}
+      >
+        <h3
+          style={{
+            margin: 0,
+            fontSize: 14,
+            fontWeight: 700,
+            color: isDark ? "#fff" : "#0f172a",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          🔍 Global Record Search
+        </h3>
+        {searched && (
+          <button
+            onClick={handleClear}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              fontSize: 12,
+              color: isDark ? "rgba(255,255,255,0.4)" : "#64748b",
+            }}
+          >
+            Clear results
+          </button>
+        )}
+      </div>
+
+      {/* Search controls */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr 2fr auto",
+          gap: 10,
+          alignItems: "end",
+        }}
+      >
+        {/* Module selector */}
+        <div>
+          <label
+            style={{
+              display: "block",
+              fontSize: 11,
+              fontWeight: 600,
+              marginBottom: 5,
+              color: isDark ? "rgba(255,255,255,0.45)" : "#64748b",
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+            }}
+          >
+            Module *
+          </label>
+          <select
+            value={selectedModule}
+            onChange={(e) => {
+              setSelectedModule(e.target.value);
+              setSelectedSubModule("");
+              setResults([]);
+              setSearched(false);
+              setError("");
+            }}
+            style={inputStyle}
+          >
+            <option value="">Select Module</option>
+            {modules.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Sub-module selector */}
+        <div>
+          <label
+            style={{
+              display: "block",
+              fontSize: 11,
+              fontWeight: 600,
+              marginBottom: 5,
+              color: isDark ? "rgba(255,255,255,0.45)" : "#64748b",
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+            }}
+          >
+            Sub-module
+          </label>
+          <select
+            value={selectedSubModule}
+            onChange={(e) => {
+              setSelectedSubModule(e.target.value);
+              setResults([]);
+              setSearched(false);
+            }}
+            style={{ ...inputStyle, opacity: !selectedModule ? 0.5 : 1 }}
+            disabled={!selectedModule}
+          >
+            <option value="">All (module + sub-modules)</option>
+            {currentModule?.subModules?.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Search text */}
+        <div>
+          <label
+            style={{
+              display: "block",
+              fontSize: 11,
+              fontWeight: 600,
+              marginBottom: 5,
+              color: isDark ? "rgba(255,255,255,0.45)" : "#64748b",
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+            }}
+          >
+            Search term *
+          </label>
+          <input
+            type="text"
+            placeholder="Type to search records…"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            style={inputStyle}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSearch();
+            }}
+            onFocus={(e) =>
+              (e.target.style.borderColor = isDark ? "#4B9FFF" : "#2563eb")
+            }
+            onBlur={(e) =>
+              (e.target.style.borderColor = isDark
+                ? "rgba(255,255,255,0.12)"
+                : "#e2e8f0")
+            }
+          />
+        </div>
+
+        {/* Search button */}
+        <button
+          onClick={handleSearch}
+          disabled={loading}
+          style={{
+            padding: "9px 20px",
+            borderRadius: 8,
+            cursor: "pointer",
+            background: "linear-gradient(135deg,#2563eb,#1d4ed8)",
+            border: "none",
+            color: "#fff",
+            fontSize: 13,
+            fontWeight: 600,
+            boxShadow: "0 4px 12px rgba(37,99,235,0.3)",
+            opacity: loading ? 0.7 : 1,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {loading ? "…" : "Search"}
+        </button>
+      </div>
+
+      {/* Validation error */}
+      {error && (
+        <p
+          style={{
+            margin: "8px 0 0",
+            fontSize: 12,
+            color: isDark ? "#f87171" : "#dc2626",
+          }}
+        >
+          ⚠ {error}
+        </p>
+      )}
+
+      {/* Results */}
+      {searched && !loading && (
+        <div style={{ marginTop: 16 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 10,
+              paddingBottom: 8,
+              borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.07)" : "#f1f5f9"}`,
+            }}
+          >
+            <span
+              style={{
+                fontSize: 13,
+                fontWeight: 700,
+                color: isDark ? "#fff" : "#0f172a",
+              }}
+            >
+              Results
+            </span>
+            <span
+              style={{
+                padding: "2px 8px",
+                borderRadius: 20,
+                fontSize: 11,
+                fontWeight: 700,
+                background:
+                  results.length > 0
+                    ? isDark
+                      ? "rgba(34,197,94,0.15)"
+                      : "#f0fdf4"
+                    : isDark
+                      ? "rgba(255,255,255,0.06)"
+                      : "#f1f5f9",
+                color:
+                  results.length > 0
+                    ? isDark
+                      ? "#4ade80"
+                      : "#16a34a"
+                    : isDark
+                      ? "rgba(255,255,255,0.4)"
+                      : "#94a3b8",
+              }}
+            >
+              {results.length} found
+            </span>
+            <span
+              style={{
+                fontSize: 12,
+                color: isDark ? "rgba(255,255,255,0.35)" : "#94a3b8",
+              }}
+            >
+              in <strong>{currentModule?.name}</strong>
+              {selectedSubModule &&
+              currentModule?.subModules?.find((s) => s.id === selectedSubModule)
+                ? ` › ${currentModule.subModules.find((s) => s.id === selectedSubModule).name}`
+                : " (all sub-modules)"}
+            </span>
+          </div>
+
+          {results.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "24px 0" }}>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>🔍</div>
+              <p
+                style={{
+                  fontSize: 13,
+                  color: isDark ? "rgba(255,255,255,0.35)" : "#94a3b8",
+                  margin: 0,
+                }}
+              >
+                No records match "<strong>{searchText}</strong>"
+              </p>
+            </div>
+          ) : (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+                maxHeight: 360,
+                overflowY: "auto",
+              }}
+            >
+              {results.map((record) => {
+                // Recursively collect ALL field definitions from the module tree
+                function collectFields(subModules) {
+                  if (!subModules) return [];
+                  return subModules.flatMap((sm) => [
+                    ...(sm.fields ?? []),
+                    ...collectFields(sm.subModules),
+                  ]);
+                }
+                const allFields = [
+                  ...(currentModule?.fields ?? []),
+                  ...collectFields(currentModule?.subModules),
+                ];
+
+                // Format a value for display — skip file objects, booleans, etc.
+                function fmtVal(value) {
+                  if (value === null || value === undefined || value === "")
+                    return "—";
+                  if (typeof value === "boolean") return value ? "Yes" : "No";
+                  // File upload objects — show just the filename
+                  if (typeof value === "object" && value.name)
+                    return value.name;
+                  // Any other object — skip (don't show raw JSON)
+                  if (typeof value === "object") return null;
+                  return String(value);
+                }
+
+                const entries = Object.entries(record.values || {}).filter(
+                  ([, v]) => {
+                    // Skip file objects and null-ish values entirely
+                    if (v === null || v === undefined || v === "") return false;
+                    if (typeof v === "object" && !v.name) return false;
+                    return true;
+                  },
+                );
+
+                return (
+                  <div
+                    key={record.id}
+                    style={{
+                      padding: "12px 14px",
+                      borderRadius: 10,
+                      background: isDark ? "rgba(255,255,255,0.04)" : "#f8fafc",
+                      border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "#e2e8f0"}`,
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(auto-fill, minmax(140px, 1fr))",
+                        gap: "6px 16px",
+                      }}
+                    >
+                      {entries.map(([fieldId, value]) => {
+                        const field = allFields.find((f) => f.id === fieldId);
+                        // Skip fields we can't label (unknown IDs with no match)
+                        if (!field) return null;
+                        const displayVal = fmtVal(value);
+                        if (displayVal === null) return null;
+                        return (
+                          <div key={fieldId}>
+                            <div
+                              style={{
+                                fontSize: 10,
+                                fontWeight: 700,
+                                textTransform: "uppercase",
+                                letterSpacing: "0.06em",
+                                color: isDark
+                                  ? "rgba(255,255,255,0.35)"
+                                  : "#94a3b8",
+                                marginBottom: 2,
+                              }}
+                            >
+                              {field.label}
+                            </div>
+                            <div
+                              style={{
+                                fontSize: 13,
+                                color: isDark ? "#fff" : "#0f172a",
+                                fontWeight: 500,
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {displayVal}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {/* Sub-module tag — show which sub-module this record belongs to */}
+                    {record.subModuleId &&
+                      (() => {
+                        function findSubModule(subModules, id) {
+                          for (const sm of subModules ?? []) {
+                            if (sm.id === id) return sm;
+                            const found = findSubModule(sm.subModules, id);
+                            if (found) return found;
+                          }
+                          return null;
+                        }
+                        const sm = findSubModule(
+                          currentModule?.subModules,
+                          record.subModuleId,
+                        );
+                        return sm ? (
+                          <div
+                            style={{
+                              marginTop: 8,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 5,
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: 10,
+                                color: isDark
+                                  ? "rgba(165,180,252,0.5)"
+                                  : "#6366f1",
+                              }}
+                            >
+                              ◫
+                            </span>
+                            <span
+                              style={{
+                                fontSize: 10,
+                                fontWeight: 600,
+                                color: isDark
+                                  ? "rgba(165,180,252,0.6)"
+                                  : "#6366f1",
+                              }}
+                            >
+                              {sm.name}
+                            </span>
+                          </div>
+                        ) : null;
+                      })()}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const { isDark } = useTheme();
   const { user, isAdmin } = useAuth();
-  const { modules, loadModules } = useData();
+  const { modules, loadModules, filterRecords } = useData();
 
   useEffect(() => {
     loadModules();
   }, [loadModules]);
 
   const totalFields = modules.reduce((s, m) => s + (m.fields?.length ?? 0), 0);
-  const totalRecords = 0; // placeholder — wire to your records count if available
   const recentModules = [...modules].slice(0, 6);
 
   const textPrimary = isDark ? "#fff" : "#0f172a";
@@ -434,13 +915,8 @@ export default function Dashboard() {
       style={{ padding: "32px 40px", minHeight: "100%", color: textPrimary }}
     >
       <style>{`
-        @keyframes fadeSlideUp {
-          from { opacity: 0; transform: translateY(16px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes pulse {
-          0%,100% { opacity: 1; } 50% { opacity: 0.5; }
-        }
+        @keyframes fadeSlideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
       `}</style>
 
       {/* ── Header ── */}
@@ -514,7 +990,6 @@ export default function Dashboard() {
             </span>
           </p>
         </div>
-
         {isAdmin && (
           <Link to="/modules/new" style={{ textDecoration: "none" }}>
             <button
@@ -534,8 +1009,7 @@ export default function Dashboard() {
                 letterSpacing: 0.2,
               }}
             >
-              <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>
-              New Module
+              <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>New Module
             </button>
           </Link>
         )}
@@ -584,6 +1058,13 @@ export default function Dashboard() {
         />
       </div>
 
+      {/* ── Global Search — extracted to own component ── */}
+      <GlobalSearch
+        modules={modules}
+        filterRecords={filterRecords}
+        isDark={isDark}
+      />
+
       {/* ── Main content: modules grid + sidebar ── */}
       <div
         style={{
@@ -595,7 +1076,6 @@ export default function Dashboard() {
       >
         {/* Left: Modules */}
         <div>
-          {/* Section header */}
           <div
             style={{
               display: "flex",
