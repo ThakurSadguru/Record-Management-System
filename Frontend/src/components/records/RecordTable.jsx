@@ -1,4 +1,8 @@
 import { useState } from "react";
+import {
+  exportRecordsToPdf,
+  exportSingleRecordToPdf,
+} from "../../utils/exportPdf";
 
 function fileIcon(mime) {
   if (!mime) return "📎";
@@ -240,8 +244,41 @@ export default function RecordTable({
   canDelete,
   isDark = false,
 }) {
-  const showActions = canEdit || canDelete;
+  const [selected, setSelected] = useState(new Set());
 
+  const showActions = canEdit || canDelete;
+  const allSelected = records.length > 0 && selected.size === records.length;
+
+  function toggleAll() {
+    setSelected(allSelected ? new Set() : new Set(records.map((r) => r.id)));
+  }
+
+  function toggleOne(id) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  function handleExportAll() {
+    exportRecordsToPdf({
+      moduleName: module.name,
+      fields: module.fields,
+      records,
+    });
+  }
+
+  function handleExportSelected() {
+    const sel = records.filter((r) => selected.has(r.id));
+    exportRecordsToPdf({
+      moduleName: module.name,
+      fields: module.fields,
+      records: sel,
+    });
+  }
+
+  // ── Theme tokens ──
   const cardBg = isDark ? "rgba(255,255,255,0.04)" : "#ffffff";
   const cardBorder = isDark ? "rgba(255,255,255,0.1)" : "#e2e8f0";
   const headerBg = isDark ? "rgba(255,255,255,0.04)" : "#f8fafc";
@@ -252,7 +289,10 @@ export default function RecordTable({
   const cellMuted = isDark ? "rgba(255,255,255,0.3)" : "#94a3b8";
   const footerBg = isDark ? "rgba(255,255,255,0.02)" : "#f8fafc";
   const requiredDot = isDark ? "#f87171" : "#ef4444";
+  const toolbarBg = isDark ? "rgba(255,255,255,0.03)" : "#f8fafc";
+  const selectedRowBg = isDark ? "rgba(37,99,235,0.08)" : "#eff6ff";
 
+  // ── Empty state ──
   if (records.length === 0) {
     return (
       <div
@@ -289,29 +329,180 @@ export default function RecordTable({
   }
 
   return (
-    <div
-      style={{
-        background: cardBg,
-        border: `1.5px solid ${cardBorder}`,
-        borderRadius: 14,
-        overflow: "hidden",
-        boxShadow: isDark ? "none" : "0 2px 8px rgba(0,0,0,0.05)",
-      }}
-    >
-      <div style={{ overflowX: "auto" }}>
-        <table
-          style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}
-        >
-          <thead>
-            <tr
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {/* ── Export / selection toolbar ── */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "10px 14px",
+          background: toolbarBg,
+          border: `1px solid ${cardBorder}`,
+          borderRadius: 10,
+          gap: 10,
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 12, color: cellMuted, fontWeight: 500 }}>
+            {selected.size > 0
+              ? `${selected.size} of ${records.length} selected`
+              : `${records.length} record${records.length !== 1 ? "s" : ""}`}
+          </span>
+          {selected.size > 0 && (
+            <button
+              onClick={() => setSelected(new Set())}
               style={{
-                borderBottom: `1.5px solid ${cardBorder}`,
-                background: headerBg,
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                fontSize: 11,
+                color: isDark ? "#60a5fa" : "#2563eb",
+                fontWeight: 600,
+                padding: 0,
               }}
             >
-              {module.fields.map((f) => (
+              Clear
+            </button>
+          )}
+        </div>
+
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {selected.size > 0 && (
+            <button
+              onClick={handleExportSelected}
+              style={{
+                padding: "6px 14px",
+                borderRadius: 8,
+                cursor: "pointer",
+                fontSize: 12,
+                fontWeight: 600,
+                background: isDark ? "rgba(22,163,74,0.12)" : "#f0fdf4",
+                border: isDark
+                  ? "1px solid rgba(22,163,74,0.25)"
+                  : "1.5px solid #bbf7d0",
+                color: isDark ? "#4ade80" : "#16a34a",
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                transition: "all 0.15s",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = isDark
+                  ? "rgba(22,163,74,0.2)"
+                  : "#dcfce7")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background = isDark
+                  ? "rgba(22,163,74,0.12)"
+                  : "#f0fdf4")
+              }
+            >
+              ⬇ Export Selected ({selected.size})
+            </button>
+          )}
+          <button
+            onClick={handleExportAll}
+            style={{
+              padding: "6px 14px",
+              borderRadius: 8,
+              cursor: "pointer",
+              fontSize: 12,
+              fontWeight: 600,
+              background: isDark ? "rgba(37,99,235,0.12)" : "#eff6ff",
+              border: isDark
+                ? "1px solid rgba(37,99,235,0.25)"
+                : "1.5px solid #bfdbfe",
+              color: isDark ? "#60a5fa" : "#2563eb",
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              transition: "all 0.15s",
+            }}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.background = isDark
+                ? "rgba(37,99,235,0.2)"
+                : "#dbeafe")
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.background = isDark
+                ? "rgba(37,99,235,0.12)"
+                : "#eff6ff")
+            }
+          >
+            ⬇ Export All PDF
+          </button>
+        </div>
+      </div>
+
+      {/* ── Table ── */}
+      <div
+        style={{
+          background: cardBg,
+          border: `1.5px solid ${cardBorder}`,
+          borderRadius: 14,
+          overflow: "hidden",
+          boxShadow: isDark ? "none" : "0 2px 8px rgba(0,0,0,0.05)",
+        }}
+      >
+        <div style={{ overflowX: "auto" }}>
+          <table
+            style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}
+          >
+            <thead>
+              <tr
+                style={{
+                  borderBottom: `1.5px solid ${cardBorder}`,
+                  background: headerBg,
+                }}
+              >
+                {/* Select all checkbox */}
                 <th
-                  key={f.id}
+                  style={{
+                    padding: "12px 16px",
+                    width: 40,
+                    textAlign: "center",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    style={{
+                      width: 14,
+                      height: 14,
+                      cursor: "pointer",
+                      accentColor: "#2563eb",
+                    }}
+                    title={allSelected ? "Deselect all" : "Select all"}
+                  />
+                </th>
+
+                {module.fields.map((f) => (
+                  <th
+                    key={f.id}
+                    style={{
+                      textAlign: "left",
+                      padding: "12px 16px",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: headerText,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.07em",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {f.label}
+                    {f.required && (
+                      <span style={{ color: requiredDot, marginLeft: 2 }}>
+                        *
+                      </span>
+                    )}
+                  </th>
+                ))}
+
+                <th
                   style={{
                     textAlign: "left",
                     padding: "12px 16px",
@@ -323,27 +514,9 @@ export default function RecordTable({
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {f.label}
-                  {f.required && (
-                    <span style={{ color: requiredDot, marginLeft: 2 }}>*</span>
-                  )}
+                  Added
                 </th>
-              ))}
-              <th
-                style={{
-                  textAlign: "left",
-                  padding: "12px 16px",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: headerText,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.07em",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Added
-              </th>
-              {showActions && (
+
                 <th
                   style={{
                     textAlign: "right",
@@ -357,171 +530,252 @@ export default function RecordTable({
                 >
                   Actions
                 </th>
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {records.map((record, idx) => (
-              <tr
-                key={record.id}
-                style={{
-                  borderBottom:
-                    idx < records.length - 1
-                      ? `1px solid ${rowDivider}`
-                      : "none",
-                  transition: "background 0.15s",
-                }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.background = rowHoverBg)
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.background = "transparent")
-                }
-              >
-                {module.fields.map((f) => (
-                  <td
-                    key={f.id}
+              </tr>
+            </thead>
+
+            <tbody>
+              {records.map((record, idx) => {
+                const isSelected = selected.has(record.id);
+                return (
+                  <tr
+                    key={record.id}
                     style={{
-                      padding: "12px 16px",
-                      color: cellText,
-                      whiteSpace: "nowrap",
-                      maxWidth: 200,
+                      borderBottom:
+                        idx < records.length - 1
+                          ? `1px solid ${rowDivider}`
+                          : "none",
+                      background: isSelected ? selectedRowBg : "transparent",
+                      transition: "background 0.15s",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isSelected)
+                        e.currentTarget.style.background = rowHoverBg;
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isSelected)
+                        e.currentTarget.style.background = "transparent";
                     }}
                   >
-                    {f.type === "file" ? (
-                      <FileCell
-                        fileData={record.values?.[f.id]}
-                        isDark={isDark}
-                      />
-                    ) : (
-                      <span
+                    {/* Row checkbox */}
+                    <td style={{ padding: "12px 16px", textAlign: "center" }}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleOne(record.id)}
                         style={{
-                          display: "block",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          color:
-                            fmt(record.values?.[f.id], f.type) === "—"
-                              ? cellMuted
-                              : cellText,
+                          width: 14,
+                          height: 14,
+                          cursor: "pointer",
+                          accentColor: "#2563eb",
+                        }}
+                      />
+                    </td>
+
+                    {/* Data cells */}
+                    {module.fields.map((f) => (
+                      <td
+                        key={f.id}
+                        style={{
+                          padding: "12px 16px",
+                          color: cellText,
+                          whiteSpace: "nowrap",
+                          maxWidth: 200,
                         }}
                       >
-                        {fmt(record.values?.[f.id], f.type)}
-                      </span>
-                    )}
-                  </td>
-                ))}
-                <td
-                  style={{
-                    padding: "12px 16px",
-                    color: cellMuted,
-                    fontSize: 12,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {record.createdAt
-                    ? new Date(record.createdAt).toLocaleString()
-                    : "—"}
-                </td>
-                {showActions && (
-                  <td
-                    style={{
-                      padding: "12px 16px",
-                      textAlign: "right",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    <div
+                        {f.type === "file" ? (
+                          <FileCell
+                            fileData={record.values?.[f.id]}
+                            isDark={isDark}
+                          />
+                        ) : (
+                          <span
+                            style={{
+                              display: "block",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              color:
+                                fmt(record.values?.[f.id], f.type) === "—"
+                                  ? cellMuted
+                                  : cellText,
+                            }}
+                          >
+                            {fmt(record.values?.[f.id], f.type)}
+                          </span>
+                        )}
+                      </td>
+                    ))}
+
+                    {/* Created at */}
+                    <td
                       style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "flex-end",
-                        gap: 6,
+                        padding: "12px 16px",
+                        color: cellMuted,
+                        fontSize: 12,
+                        whiteSpace: "nowrap",
                       }}
                     >
-                      {canEdit && (
+                      {record.createdAt
+                        ? new Date(record.createdAt).toLocaleString()
+                        : "—"}
+                    </td>
+
+                    {/* Actions */}
+                    <td
+                      style={{
+                        padding: "12px 16px",
+                        textAlign: "right",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "flex-end",
+                          gap: 6,
+                        }}
+                      >
+                        {/* Edit */}
+                        {canEdit && (
+                          <button
+                            onClick={() => onEdit(record)}
+                            style={{
+                              padding: "5px 12px",
+                              borderRadius: 7,
+                              cursor: "pointer",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              background: isDark
+                                ? "rgba(255,255,255,0.06)"
+                                : "#f1f5f9",
+                              border: isDark
+                                ? "1px solid rgba(255,255,255,0.12)"
+                                : "1.5px solid #e2e8f0",
+                              color: isDark
+                                ? "rgba(255,255,255,0.75)"
+                                : "#334155",
+                              transition: "all 0.15s",
+                            }}
+                            onMouseEnter={(e) =>
+                              (e.currentTarget.style.background = isDark
+                                ? "rgba(255,255,255,0.1)"
+                                : "#e2e8f0")
+                            }
+                            onMouseLeave={(e) =>
+                              (e.currentTarget.style.background = isDark
+                                ? "rgba(255,255,255,0.06)"
+                                : "#f1f5f9")
+                            }
+                          >
+                            Edit
+                          </button>
+                        )}
+
+                        {/* Single record PDF export */}
                         <button
-                          onClick={() => onEdit(record)}
+                          onClick={() =>
+                            exportSingleRecordToPdf({
+                              moduleName: module.name,
+                              fields: module.fields,
+                              record,
+                            })
+                          }
+                          title="Export this record as PDF"
                           style={{
-                            padding: "5px 12px",
+                            padding: "5px 10px",
                             borderRadius: 7,
                             cursor: "pointer",
                             fontSize: 12,
                             fontWeight: 600,
                             background: isDark
-                              ? "rgba(255,255,255,0.06)"
-                              : "#f1f5f9",
+                              ? "rgba(37,99,235,0.08)"
+                              : "#eff6ff",
                             border: isDark
-                              ? "1px solid rgba(255,255,255,0.12)"
-                              : "1.5px solid #e2e8f0",
-                            color: isDark
-                              ? "rgba(255,255,255,0.75)"
-                              : "#334155",
+                              ? "1px solid rgba(37,99,235,0.15)"
+                              : "1.5px solid #bfdbfe",
+                            color: isDark ? "#60a5fa" : "#2563eb",
                             transition: "all 0.15s",
                           }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = isDark
-                              ? "rgba(255,255,255,0.1)"
-                              : "#e2e8f0";
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = isDark
-                              ? "rgba(255,255,255,0.06)"
-                              : "#f1f5f9";
-                          }}
+                          onMouseEnter={(e) =>
+                            (e.currentTarget.style.background = isDark
+                              ? "rgba(37,99,235,0.15)"
+                              : "#dbeafe")
+                          }
+                          onMouseLeave={(e) =>
+                            (e.currentTarget.style.background = isDark
+                              ? "rgba(37,99,235,0.08)"
+                              : "#eff6ff")
+                          }
                         >
-                          Edit
+                          ⬇
                         </button>
-                      )}
-                      {canDelete && (
-                        <button
-                          onClick={() => onDelete(record.id)}
-                          style={{
-                            padding: "5px 12px",
-                            borderRadius: 7,
-                            cursor: "pointer",
-                            fontSize: 12,
-                            fontWeight: 600,
-                            background: isDark
-                              ? "rgba(239,68,68,0.1)"
-                              : "#fef2f2",
-                            border: isDark
-                              ? "1px solid rgba(239,68,68,0.2)"
-                              : "1.5px solid #fecaca",
-                            color: isDark ? "#f87171" : "#dc2626",
-                            transition: "all 0.15s",
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = isDark
-                              ? "rgba(239,68,68,0.2)"
-                              : "#fee2e2";
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = isDark
-                              ? "rgba(239,68,68,0.1)"
-                              : "#fef2f2";
-                          }}
-                        >
-                          Delete
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div
-        style={{
-          padding: "10px 16px",
-          borderTop: `1px solid ${rowDivider}`,
-          background: footerBg,
-          fontSize: 12,
-          color: cellMuted,
-        }}
-      >
-        {records.length} record{records.length !== 1 ? "s" : ""}
+
+                        {/* Delete */}
+                        {canDelete && (
+                          <button
+                            onClick={() => onDelete(record.id)}
+                            style={{
+                              padding: "5px 12px",
+                              borderRadius: 7,
+                              cursor: "pointer",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              background: isDark
+                                ? "rgba(239,68,68,0.1)"
+                                : "#fef2f2",
+                              border: isDark
+                                ? "1px solid rgba(239,68,68,0.2)"
+                                : "1.5px solid #fecaca",
+                              color: isDark ? "#f87171" : "#dc2626",
+                              transition: "all 0.15s",
+                            }}
+                            onMouseEnter={(e) =>
+                              (e.currentTarget.style.background = isDark
+                                ? "rgba(239,68,68,0.2)"
+                                : "#fee2e2")
+                            }
+                            onMouseLeave={(e) =>
+                              (e.currentTarget.style.background = isDark
+                                ? "rgba(239,68,68,0.1)"
+                                : "#fef2f2")
+                            }
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Footer */}
+        <div
+          style={{
+            padding: "10px 16px",
+            borderTop: `1px solid ${rowDivider}`,
+            background: footerBg,
+            fontSize: 12,
+            color: cellMuted,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <span>
+            {records.length} record{records.length !== 1 ? "s" : ""}
+          </span>
+          {selected.size > 0 && (
+            <span
+              style={{ color: isDark ? "#60a5fa" : "#2563eb", fontWeight: 600 }}
+            >
+              {selected.size} selected
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -15,4 +15,6 @@ export const moduleApi = {
 
   delete: (id) =>
     api.delete(`/modules/${id}`),
+
+  
 }
