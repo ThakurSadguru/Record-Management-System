@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Navbar, BottomCTA } from "../components/SharedComponents";
+import { authApi } from "../api/authApi";
 
 // ── Plan definitions ──────────────────────────────────────────────────────────
 const PLANS = [
@@ -277,6 +278,16 @@ function RegistrationModal({ plan, yearly, onClose, onSuccess }) {
       if (form.password !== form.confirmPw)
         e.confirmPw = "Passwords do not match";
     }
+    if (step === 2) {
+      const invalidMember = members.find(
+        (m) => m.email && !/\S+@\S+\.\S+/.test(m.email),
+      );
+
+      if (invalidMember) {
+        alert("Please enter valid member email addresses.");
+        return false;
+      }
+    }
     if (step === 3 && plan.paid) {
       if (!form.cardName.trim()) e.cardName = "Cardholder name required";
       if (form.cardNum.replace(/\s/g, "").length < 16)
@@ -298,12 +309,54 @@ function RegistrationModal({ plan, yearly, onClose, onSuccess }) {
   }
 
   async function submit() {
-    setLoading(true);
-    // TODO: replace with real API call
-    // await api.post('/api/register', { plan: plan.id, yearly, ...form, members });
-    await new Promise((r) => setTimeout(r, 1200));
-    setLoading(false);
-    onSuccess({ plan, form, members, yearly });
+    try {
+      setLoading(true);
+
+      const payload = {
+        plan: plan.tier, // STARTER | PROFESSIONAL | ENTERPRISE
+        yearly,
+
+        orgName: form.orgName,
+        industry: form.industry,
+        orgSize: form.orgSize,
+
+        adminName: form.adminName,
+        adminEmail: form.adminEmail,
+        adminPhone: form.adminPhone,
+        password: form.password,
+
+        members: members
+          .filter((m) => m.email.trim())
+          .map((m) => ({
+            email: m.email,
+            role: m.role.toUpperCase(),
+          })),
+
+        companySize: form.companySize,
+        deployment: form.deployment,
+        requirements: form.requirements,
+      };
+
+      const response = await authApi.registerWithPlan(payload);
+
+      console.log(response.data);
+
+      onSuccess({
+        plan,
+        form,
+        members,
+        yearly,
+      });
+    } catch (error) {
+      console.error(error);
+
+      alert(
+        error?.response?.data?.message ||
+          "Registration failed. Please try again.",
+      );
+    } finally {
+      setLoading(false);
+    }
   }
 
   function addMember() {

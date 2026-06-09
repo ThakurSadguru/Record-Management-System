@@ -1,5 +1,6 @@
 import api from './axiosInstance'
 
+
 export const authApi = {
   login: (email, password) =>
     api.post('/auth/login', { email, password }),
@@ -7,7 +8,10 @@ export const authApi = {
   register: (name, email, password, role = 'STAFF') =>
     api.post('/auth/register', { name, email, password, role }),
 
-  // ── Forgot Password ──────────────────────────────────
+  registerWithPlan: (payload) =>
+    api.post('/auth/register-plan', payload),
+
+  // Forgot Password
   forgotPassword: (email) =>
     api.post('/auth/forgot-password', { email }),
 
