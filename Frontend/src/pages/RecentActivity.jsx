@@ -4,6 +4,8 @@ import { useNavigate } from "react-router-dom";
 import { useTheme } from "../components/layout/AppLayout";
 import { useAuth } from "../context/AuthContext";
 import { activityApi } from "../api/activityApi";
+import { getPlanLimits } from "../utils/planLimits";
+import { FeatureLock } from "../components/plan/PlanGate";
 
 const ACTION_STYLES = {
   CREATE: {
@@ -93,8 +95,10 @@ function avatarColor(email = "") {
 
 export default function RecentActivity() {
   const { isDark } = useTheme();
-  const { isAdmin, isSuperAdmin } = useAuth();
+  const { isAdmin, isSuperAdmin, user } = useAuth();
   const navigate = useNavigate();
+  const limits = getPlanLimits(user?.plan);
+  const canViewLogs = limits.activityLog;
 
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -115,8 +119,12 @@ export default function RecentActivity() {
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (canViewLogs) {
+      load();
+    } else {
+      setLoading(false);
+    }
+  }, [load, canViewLogs]);
 
   const textPrimary = isDark ? "#fff" : "#0f172a";
   const textSecondary = isDark ? "rgba(255,255,255,0.45)" : "#64748b";
@@ -150,6 +158,22 @@ export default function RecentActivity() {
       i.details?.toLowerCase().includes(q);
     return matchAction && matchSearch;
   });
+
+  if (!canViewLogs) {
+    return (
+      <div style={{ padding: "36px 40px" }}>
+        <FeatureLock
+          icon="📋"
+          title="Activity Log requires Professional plan"
+          description="Track every create, update, delete, restore, login and invite event across your workspace."
+          isDark={isDark}
+          blurPreview
+        >
+          <FakeActivityPreview isDark={isDark} />
+        </FeatureLock>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -556,6 +580,61 @@ export default function RecentActivity() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function FakeActivityPreview({ isDark }) {
+  const rows = [
+    {
+      user: "Priya S.",
+      action: "CREATE",
+      entity: "Employees",
+      time: "2 min ago",
+    },
+    {
+      user: "Rahul K.",
+      action: "UPDATE",
+      entity: "Record #482",
+      time: "14 min ago",
+    },
+    {
+      user: "Anita M.",
+      action: "DELETE",
+      entity: "Record #381",
+      time: "1 hr ago",
+    },
+    {
+      user: "Priya S.",
+      action: "LOGIN",
+      entity: "Authentication",
+      time: "3 hr ago",
+    },
+  ];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {rows.map((row, idx) => (
+        <div
+          key={idx}
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "12px 16px",
+            borderRadius: 10,
+            background: isDark ? "rgba(255,255,255,0.04)" : "#f8fafc",
+            border: isDark
+              ? "1px solid rgba(255,255,255,0.08)"
+              : "1px solid #e2e8f0",
+          }}
+        >
+          <span>{row.user}</span>
+          <span>{row.action}</span>
+          <span>{row.entity}</span>
+          <span>{row.time}</span>
+        </div>
+      ))}
     </div>
   );
 }

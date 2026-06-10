@@ -194,6 +194,7 @@ export default function ModuleBuilder() {
   const navigate = useNavigate();
   const { createModule, updateModule } = useData();
   const { isDark } = useTheme();
+  const { modules } = useData();
 
   const [name, setName] = useState("");
   const [fields, setFields] = useState([]);

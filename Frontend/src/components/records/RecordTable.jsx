@@ -3,6 +3,9 @@ import {
   exportRecordsToPdf,
   exportSingleRecordToPdf,
 } from "../../utils/exportPdf";
+import { useAuth } from "../../context/AuthContext";
+import { useNavigate } from "react-router-dom";
+import { exportRecordsToExcel } from "../../utils/exportExcel";
 
 function fileIcon(mime) {
   if (!mime) return "📎";
@@ -244,6 +247,11 @@ export default function RecordTable({
   canDelete,
   isDark = false,
 }) {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  const isPro = user?.plan === "PROFESSIONAL" || user?.plan === "ENTERPRISE";
+
   const [selected, setSelected] = useState(new Set());
 
   const showActions = canEdit || canDelete;
@@ -402,37 +410,31 @@ export default function RecordTable({
               ⬇ Export Selected ({selected.size})
             </button>
           )}
-          <button
-            onClick={handleExportAll}
-            style={{
-              padding: "6px 14px",
-              borderRadius: 8,
-              cursor: "pointer",
-              fontSize: 12,
-              fontWeight: 600,
-              background: isDark ? "rgba(37,99,235,0.12)" : "#eff6ff",
-              border: isDark
-                ? "1px solid rgba(37,99,235,0.25)"
-                : "1.5px solid #bfdbfe",
-              color: isDark ? "#60a5fa" : "#2563eb",
-              display: "flex",
-              alignItems: "center",
-              gap: 5,
-              transition: "all 0.15s",
-            }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.background = isDark
-                ? "rgba(37,99,235,0.2)"
-                : "#dbeafe")
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.background = isDark
-                ? "rgba(37,99,235,0.12)"
-                : "#eff6ff")
-            }
-          >
-            ⬇ Export All PDF
-          </button>
+          {isPro ? (
+            <button
+              onClick={() =>
+                exportRecordsToExcel({
+                  moduleName: module.name,
+                  fields: module.fields,
+                  records,
+                })
+              }
+            >
+              ⬇ Export All PDF
+            </button>
+          ) : (
+            <button
+              onClick={() => navigate("/pricing")}
+              style={
+                {
+                  /* amber/yellow upgrade style */
+                }
+              }
+              title="Upgrade to export PDF"
+            >
+              🔒 Export PDF — Pro
+            </button>
+          )}
         </div>
       </div>
 

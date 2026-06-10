@@ -1,932 +1,1192 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { useData } from "../../context/DataContext";
 import { useTheme } from "../layout/AppLayout";
+import { moduleApi } from "../../api/moduleApi";
+import { recordApi } from "../../api/recordApi";
+import { userApi } from "../../api/userApi";
+import { activityApi } from "../../api/activityApi";
+import { getPlanLimits } from "../../utils/planLimits";
 
-// ── Animated counter ──────────────────────────────────────────────────────────
-function AnimatedNumber({ value }) {
-  const [display, setDisplay] = useState(0);
-  useEffect(() => {
-    let start = 0;
-    const end = Number(value) || 0;
-    if (start === end) {
-      setDisplay(end);
-      return;
-    }
-    const duration = 800;
-    const step = Math.ceil(end / (duration / 16));
-    const timer = setInterval(() => {
-      start = Math.min(start + step, end);
-      setDisplay(start);
-      if (start >= end) clearInterval(timer);
-    }, 16);
-    return () => clearInterval(timer);
-  }, [value]);
-  return typeof value === "number" ? display : value;
+// ─────────────────────────────────────────────────────────────────────────────
+// Plan limits
+// ─────────────────────────────────────────────────────────────────────────────
+// Import from utils/planLimits.js — inlined here for completeness
+// Remove this block if you already import getPlanLimits above
+/*
+const PLAN_LIMITS = { ... };
+function getPlanLimits(plan) { ... }
+*/
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Small UI atoms
+// ─────────────────────────────────────────────────────────────────────────────
+
+function PlanBadge({ plan, isDark }) {
+  const cfg = {
+    STARTER: {
+      label: "Free",
+      bg: isDark ? "rgba(100,116,139,0.2)" : "#f1f5f9",
+      color: isDark ? "#94a3b8" : "#475569",
+    },
+    PROFESSIONAL: {
+      label: "Pro",
+      bg: isDark ? "rgba(37,99,235,0.2)" : "#dbeafe",
+      color: isDark ? "#60a5fa" : "#1d4ed8",
+    },
+    ENTERPRISE: {
+      label: "Enterprise",
+      bg: isDark ? "rgba(124,58,237,0.2)" : "#ede9fe",
+      color: isDark ? "#a78bfa" : "#6d28d9",
+    },
+  }[plan?.toUpperCase()] ?? {
+    label: "Free",
+    bg: "rgba(100,116,139,0.15)",
+    color: "#94a3b8",
+  };
+  return (
+    <span
+      style={{
+        fontSize: 10,
+        fontWeight: 700,
+        padding: "2px 8px",
+        borderRadius: 99,
+        background: cfg.bg,
+        color: cfg.color,
+        letterSpacing: "0.05em",
+      }}
+    >
+      {cfg.label}
+    </span>
+  );
 }
 
-// ── Stat card ─────────────────────────────────────────────────────────────────
-function StatCard({ label, value, icon, color, isDark, delay = 0 }) {
-  const palette = {
-    emerald: {
-      grad: isDark
-        ? "linear-gradient(135deg,rgba(16,185,129,0.18),rgba(5,150,105,0.08))"
-        : "linear-gradient(135deg,#d1fae5,#a7f3d0)",
-      border: isDark ? "rgba(16,185,129,0.25)" : "#6ee7b7",
-      icon: isDark ? "rgba(16,185,129,0.2)" : "rgba(16,185,129,0.15)",
-      iconText: isDark ? "#10b981" : "#065f46",
-      val: isDark ? "#34d399" : "#065f46",
-      lbl: isDark ? "rgba(255,255,255,0.5)" : "#047857",
-      glow: "rgba(16,185,129,0.15)",
-    },
-    blue: {
-      grad: isDark
-        ? "linear-gradient(135deg,rgba(59,130,246,0.18),rgba(37,99,235,0.08))"
-        : "linear-gradient(135deg,#dbeafe,#bfdbfe)",
-      border: isDark ? "rgba(59,130,246,0.25)" : "#93c5fd",
-      icon: isDark ? "rgba(59,130,246,0.2)" : "rgba(59,130,246,0.15)",
-      iconText: isDark ? "#60a5fa" : "#1e40af",
-      val: isDark ? "#60a5fa" : "#1e40af",
-      lbl: isDark ? "rgba(255,255,255,0.5)" : "#1d4ed8",
-      glow: "rgba(59,130,246,0.15)",
-    },
-    violet: {
-      grad: isDark
-        ? "linear-gradient(135deg,rgba(139,92,246,0.18),rgba(109,40,217,0.08))"
-        : "linear-gradient(135deg,#ede9fe,#ddd6fe)",
-      border: isDark ? "rgba(139,92,246,0.25)" : "#c4b5fd",
-      icon: isDark ? "rgba(139,92,246,0.2)" : "rgba(139,92,246,0.15)",
-      iconText: isDark ? "#a78bfa" : "#5b21b6",
-      val: isDark ? "#a78bfa" : "#5b21b6",
-      lbl: isDark ? "rgba(255,255,255,0.5)" : "#6d28d9",
-      glow: "rgba(139,92,246,0.15)",
-    },
-    amber: {
-      grad: isDark
-        ? "linear-gradient(135deg,rgba(245,158,11,0.18),rgba(217,119,6,0.08))"
-        : "linear-gradient(135deg,#fef3c7,#fde68a)",
-      border: isDark ? "rgba(245,158,11,0.25)" : "#fcd34d",
-      icon: isDark ? "rgba(245,158,11,0.2)" : "rgba(245,158,11,0.15)",
-      iconText: isDark ? "#fbbf24" : "#92400e",
-      val: isDark ? "#fbbf24" : "#92400e",
-      lbl: isDark ? "rgba(255,255,255,0.5)" : "#b45309",
-      glow: "rgba(245,158,11,0.15)",
-    },
-  };
-  const p = palette[color] || palette.blue;
+function ProBadge({ onClick, isDark }) {
+  return (
+    <span
+      onClick={onClick}
+      style={{
+        fontSize: 10,
+        fontWeight: 700,
+        padding: "2px 8px",
+        borderRadius: 99,
+        cursor: "pointer",
+        background: isDark ? "rgba(251,191,36,0.1)" : "#fffbeb",
+        color: isDark ? "#fbbf24" : "#d97706",
+        border: isDark ? "1px solid rgba(251,191,36,0.2)" : "1px solid #fde68a",
+      }}
+    >
+      ⭐ Pro
+    </span>
+  );
+}
+
+function SectionHeader({ title, right, isDark }) {
   return (
     <div
       style={{
-        flex: 1,
-        background: p.grad,
-        border: `1px solid ${p.border}`,
-        borderRadius: 16,
-        padding: "20px 22px",
-        position: "relative",
-        overflow: "hidden",
-        boxShadow: isDark ? `0 8px 32px ${p.glow}` : `0 4px 20px ${p.glow}`,
-        animation: `fadeSlideUp 0.5s ease ${delay}ms both`,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        marginBottom: 14,
       }}
     >
-      <div
+      <h2
         style={{
-          position: "absolute",
-          top: -20,
-          right: -20,
-          width: 80,
-          height: 80,
-          borderRadius: "50%",
-          background: p.glow,
-          filter: "blur(20px)",
-          pointerEvents: "none",
-        }}
-      />
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          marginBottom: 14,
+          fontSize: 14,
+          fontWeight: 700,
+          color: isDark ? "#fff" : "#0f172a",
+          margin: 0,
+          textTransform: "uppercase",
+          letterSpacing: "0.06em",
         }}
       >
+        {title}
+      </h2>
+      {right}
+    </div>
+  );
+}
+
+function UpgradeBanner({ type, count, max, isDark, navigate }) {
+  if (max === Infinity) return null;
+  const near = count >= max * 0.8;
+  const at = count >= max;
+  if (!near) return null;
+  const msg = at
+    ? `You've reached your ${max}-${type} limit on the free plan.`
+    : `Using ${count} of ${max} ${type}s — approaching your free plan limit.`;
+  return (
+    <div
+      style={{
+        padding: "12px 18px",
+        borderRadius: 10,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+        marginBottom: 6,
+        background: isDark
+          ? at
+            ? "rgba(239,68,68,0.07)"
+            : "rgba(251,191,36,0.07)"
+          : at
+            ? "#fef2f2"
+            : "#fffbeb",
+        border: `1px solid ${isDark ? (at ? "rgba(239,68,68,0.2)" : "rgba(251,191,36,0.2)") : at ? "#fecaca" : "#fde68a"}`,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ fontSize: 18 }}>{at ? "🚫" : "⚠️"}</span>
+        <div>
+          <div
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              color: isDark
+                ? at
+                  ? "#f87171"
+                  : "#fbbf24"
+                : at
+                  ? "#dc2626"
+                  : "#d97706",
+            }}
+          >
+            {at ? "Limit reached" : "Approaching limit"}
+          </div>
+          <div
+            style={{
+              fontSize: 11,
+              color: isDark ? "rgba(255,255,255,0.45)" : "#64748b",
+              marginTop: 1,
+            }}
+          >
+            {msg}
+          </div>
+        </div>
+      </div>
+      <button
+        onClick={() => navigate("/pricing")}
+        style={{
+          padding: "6px 14px",
+          borderRadius: 7,
+          cursor: "pointer",
+          flexShrink: 0,
+          background: "linear-gradient(135deg,#2563eb,#1d4ed8)",
+          border: "none",
+          color: "#fff",
+          fontSize: 11,
+          fontWeight: 700,
+        }}
+      >
+        Upgrade →
+      </button>
+    </div>
+  );
+}
+
+function FeatureLock({
+  icon = "⭐",
+  title,
+  description,
+  isDark,
+  navigate,
+  children,
+  minHeight = 160,
+}) {
+  return (
+    <div
+      style={{
+        position: "relative",
+        borderRadius: 12,
+        overflow: "hidden",
+        minHeight,
+      }}
+    >
+      {children && (
         <div
           style={{
-            width: 40,
-            height: 40,
-            borderRadius: 10,
-            background: p.icon,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 18,
+            filter: "blur(3px)",
+            opacity: 0.3,
+            pointerEvents: "none",
+            userSelect: "none",
           }}
         >
-          {icon}
+          {children}
         </div>
+      )}
+      <div
+        style={{
+          position: children ? "absolute" : "relative",
+          inset: 0,
+          background: isDark ? "rgba(251,191,36,0.05)" : "#fffbeb",
+          border: `1px solid ${isDark ? "rgba(251,191,36,0.15)" : "#fde68a"}`,
+          borderRadius: 12,
+          padding: "24px",
+          textAlign: "center",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+        }}
+      >
+        <div style={{ fontSize: 28 }}>{icon}</div>
         <div
           style={{
-            width: 6,
-            height: 6,
-            borderRadius: "50%",
-            background: p.val,
-            opacity: 0.6,
-            marginTop: 4,
+            fontSize: 13,
+            fontWeight: 700,
+            color: isDark ? "#fbbf24" : "#d97706",
           }}
-        />
-      </div>
-      <div
-        style={{
-          fontSize: 28,
-          fontWeight: 900,
-          color: p.val,
-          lineHeight: 1,
-          marginBottom: 5,
-          letterSpacing: -1,
-        }}
-      >
-        <AnimatedNumber value={typeof value === "number" ? value : value} />
-      </div>
-      <div
-        style={{
-          fontSize: 12,
-          fontWeight: 600,
-          color: p.lbl,
-          textTransform: "uppercase",
-          letterSpacing: "0.08em",
-        }}
-      >
-        {label}
+        >
+          {title}
+        </div>
+        <p
+          style={{
+            fontSize: 12,
+            color: isDark ? "rgba(255,255,255,0.4)" : "#64748b",
+            margin: 0,
+            maxWidth: 300,
+            lineHeight: 1.6,
+          }}
+        >
+          {description}
+        </p>
+        <button
+          onClick={() => navigate("/pricing")}
+          style={{
+            marginTop: 4,
+            padding: "8px 20px",
+            borderRadius: 8,
+            cursor: "pointer",
+            background: "linear-gradient(135deg,#2563eb,#1d4ed8)",
+            border: "none",
+            color: "#fff",
+            fontSize: 12,
+            fontWeight: 700,
+          }}
+        >
+          Upgrade to Professional →
+        </button>
       </div>
     </div>
   );
 }
 
-// ── Module card ───────────────────────────────────────────────────────────────
-function ModuleCard({ module, isDark, index }) {
-  const avatarColors = [
-    ["#3b82f6", "#1d4ed8"],
-    ["#8b5cf6", "#6d28d9"],
-    ["#10b981", "#065f46"],
-    ["#f59e0b", "#92400e"],
-    ["#ef4444", "#991b1b"],
-    ["#06b6d4", "#0e7490"],
-  ];
-  const [c1, c2] = avatarColors[index % avatarColors.length];
-  return (
-    <Link to={`/modules/${module.id}`} style={{ textDecoration: "none" }}>
-      <div
-        style={{
-          background: isDark ? "rgba(255,255,255,0.04)" : "#ffffff",
-          border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "#e8f0fe"}`,
-          borderRadius: 16,
-          padding: "20px 22px",
-          cursor: "pointer",
-          transition: "all 0.2s ease",
-          boxShadow: isDark
-            ? "0 2px 16px rgba(0,0,0,0.2)"
-            : "0 2px 12px rgba(37,99,235,0.06)",
-          animation: `fadeSlideUp 0.5s ease ${100 + index * 60}ms both`,
-          position: "relative",
-          overflow: "hidden",
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.transform = "translateY(-3px)";
-          e.currentTarget.style.boxShadow = isDark
-            ? "0 12px 40px rgba(0,0,0,0.3)"
-            : "0 12px 32px rgba(37,99,235,0.14)";
-          e.currentTarget.style.borderColor = isDark
-            ? "rgba(255,255,255,0.16)"
-            : "#bfdbfe";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.transform = "translateY(0)";
-          e.currentTarget.style.boxShadow = isDark
-            ? "0 2px 16px rgba(0,0,0,0.2)"
-            : "0 2px 12px rgba(37,99,235,0.06)";
-          e.currentTarget.style.borderColor = isDark
-            ? "rgba(255,255,255,0.08)"
-            : "#e8f0fe";
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: 14,
-          }}
-        >
-          <div
-            style={{
-              width: 42,
-              height: 42,
-              borderRadius: 12,
-              background: `linear-gradient(135deg,${c1},${c2})`,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#fff",
-              fontWeight: 800,
-              fontSize: 16,
-              boxShadow: `0 4px 12px ${c1}55`,
-            }}
-          >
-            {module?.name?.[0]?.toUpperCase() || "M"}
-          </div>
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              color: isDark ? "rgba(255,255,255,0.25)" : "#94a3b8",
-              background: isDark ? "rgba(255,255,255,0.06)" : "#f1f5f9",
-              padding: "3px 8px",
-              borderRadius: 99,
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-            }}
-          >
-            View →
-          </span>
-        </div>
-        <div
-          style={{
-            fontWeight: 700,
-            fontSize: 15,
-            color: isDark ? "#fff" : "#0f172a",
-            marginBottom: 6,
-            letterSpacing: -0.3,
-          }}
-        >
-          {module.name}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <div
-            style={{
-              width: 5,
-              height: 5,
-              borderRadius: "50%",
-              background: isDark ? "rgba(255,255,255,0.2)" : "#cbd5e1",
-            }}
-          />
-          <span
-            style={{
-              fontSize: 11,
-              color: isDark ? "rgba(255,255,255,0.35)" : "#94a3b8",
-              fontWeight: 500,
-            }}
-          >
-            {module.fields?.length ?? 0} field
-            {module.fields?.length !== 1 ? "s" : ""}
-          </span>
-          {(module.subModules?.length ?? 0) > 0 && (
-            <>
-              <div
-                style={{
-                  width: 3,
-                  height: 3,
-                  borderRadius: "50%",
-                  background: isDark ? "rgba(255,255,255,0.15)" : "#e2e8f0",
-                }}
-              />
-              <span
-                style={{
-                  fontSize: 11,
-                  color: isDark ? "rgba(99,102,241,0.7)" : "#6366f1",
-                  fontWeight: 500,
-                }}
-              >
-                {module.subModules.length} sub
-              </span>
-            </>
-          )}
-        </div>
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            height: 1,
-            background: `linear-gradient(90deg,transparent,${c1}44,transparent)`,
-          }}
-        />
-      </div>
-    </Link>
-  );
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// Stat card
+// ─────────────────────────────────────────────────────────────────────────────
 
-// ── Quick action button ───────────────────────────────────────────────────────
-function QuickAction({ to, icon, label, desc, color, isDark }) {
-  const colors = {
-    blue: {
-      bg: isDark ? "rgba(59,130,246,0.1)" : "#eff6ff",
-      border: isDark ? "rgba(59,130,246,0.2)" : "#bfdbfe",
-      text: isDark ? "#60a5fa" : "#1d4ed8",
-    },
-    green: {
-      bg: isDark ? "rgba(16,185,129,0.1)" : "#f0fdf4",
-      border: isDark ? "rgba(16,185,129,0.2)" : "#bbf7d0",
-      text: isDark ? "#34d399" : "#15803d",
-    },
-    violet: {
-      bg: isDark ? "rgba(139,92,246,0.1)" : "#f5f3ff",
-      border: isDark ? "rgba(139,92,246,0.2)" : "#ddd6fe",
-      text: isDark ? "#a78bfa" : "#6d28d9",
-    },
-    amber: {
-      bg: isDark ? "rgba(245,158,11,0.1)" : "#fffbeb",
-      border: isDark ? "rgba(245,158,11,0.2)" : "#fde68a",
-      text: isDark ? "#fbbf24" : "#b45309",
-    },
-  };
-  const c = colors[color] || colors.blue;
-  return (
-    <Link to={to} style={{ textDecoration: "none" }}>
-      <div
-        style={{
-          background: c.bg,
-          border: `1px solid ${c.border}`,
-          borderRadius: 12,
-          padding: "14px 16px",
-          cursor: "pointer",
-          transition: "all 0.18s",
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.transform = "translateX(3px)";
-          e.currentTarget.style.opacity = "0.85";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.transform = "translateX(0)";
-          e.currentTarget.style.opacity = "1";
-        }}
-      >
-        <div style={{ fontSize: 22, lineHeight: 1 }}>{icon}</div>
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: c.text }}>
-            {label}
-          </div>
-          <div
-            style={{
-              fontSize: 11,
-              color: isDark ? "rgba(255,255,255,0.35)" : "#94a3b8",
-              marginTop: 2,
-            }}
-          >
-            {desc}
-          </div>
-        </div>
-        <div
-          style={{
-            marginLeft: "auto",
-            fontSize: 16,
-            color: isDark ? "rgba(255,255,255,0.2)" : "#cbd5e1",
-          }}
-        >
-          →
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-// ── Global Search Section ─────────────────────────────────────────────────────
-function GlobalSearch({ modules, filterRecords, isDark }) {
-  const [selectedModule, setSelectedModule] = useState("");
-  const [selectedSubModule, setSelectedSubModule] = useState("");
-  const [searchText, setSearchText] = useState("");
-  const [results, setResults] = useState([]);
-  const [searched, setSearched] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  const currentModule = modules.find((m) => m.id === selectedModule);
-
-  const cardBg = isDark ? "rgba(255,255,255,0.03)" : "#ffffff";
-  const cardBorder = isDark ? "rgba(255,255,255,0.07)" : "#e8f0fe";
-  const inputStyle = {
-    padding: "9px 12px",
-    borderRadius: 8,
-    fontSize: 13,
-    background: isDark ? "rgba(255,255,255,0.06)" : "#fff",
-    border: `1.5px solid ${isDark ? "rgba(255,255,255,0.12)" : "#e2e8f0"}`,
-    color: isDark ? "#fff" : "#0f172a",
-    outline: "none",
-    width: "100%",
-    boxSizing: "border-box",
-  };
-
-  async function handleSearch() {
-    // Validate: module must be selected
-    if (!selectedModule) {
-      setError("Please select a module first.");
-      return;
-    }
-    if (!searchText.trim()) {
-      setError("Please enter a search term.");
-      return;
-    }
-    setError("");
-    setLoading(true);
-    try {
-      const data = await filterRecords(
-        selectedModule,
-        selectedSubModule || null,
-        searchText.trim(),
-      );
-      setResults(data);
-      setSearched(true);
-    } catch (err) {
-      console.error(err);
-      setError("Search failed. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function handleClear() {
-    setSelectedModule("");
-    setSelectedSubModule("");
-    setSearchText("");
-    setResults([]);
-    setSearched(false);
-    setError("");
-  }
+function StatCard({ label, value, sub, icon, accent, max, isDark }) {
+  const cardBg = isDark ? "rgba(255,255,255,0.04)" : "#fff";
+  const cardBorder = isDark ? "rgba(255,255,255,0.1)" : "#e2e8f0";
+  const textPrimary = isDark ? "#fff" : "#0f172a";
+  const textSecondary = isDark ? "rgba(255,255,255,0.45)" : "#64748b";
+  const pct =
+    max && max !== Infinity ? Math.min((value / max) * 100, 100) : null;
 
   return (
     <div
       style={{
         background: cardBg,
         border: `1px solid ${cardBorder}`,
-        borderRadius: 16,
-        padding: 20,
-        marginBottom: 24,
+        borderRadius: 14,
+        padding: "20px 22px",
+        boxShadow: isDark ? "none" : "0 1px 6px rgba(0,0,0,0.04)",
       }}
     >
       <div
         style={{
           display: "flex",
-          alignItems: "center",
+          alignItems: "flex-start",
           justifyContent: "space-between",
           marginBottom: 14,
         }}
       >
-        <h3
+        <div
           style={{
-            margin: 0,
-            fontSize: 14,
-            fontWeight: 700,
-            color: isDark ? "#fff" : "#0f172a",
+            fontSize: 22,
+            width: 40,
+            height: 40,
+            borderRadius: 10,
             display: "flex",
             alignItems: "center",
-            gap: 8,
+            justifyContent: "center",
+            background: isDark ? "rgba(255,255,255,0.06)" : "#f8fafc",
+            border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "#e2e8f0"}`,
           }}
         >
-          🔍 Global Record Search
-        </h3>
-        {searched && (
-          <button
-            onClick={handleClear}
+          {icon}
+        </div>
+        {sub && (
+          <span
             style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              fontSize: 12,
-              color: isDark ? "rgba(255,255,255,0.4)" : "#64748b",
+              fontSize: 11,
+              fontWeight: 600,
+              color: sub.startsWith("+") ? "#16a34a" : textSecondary,
+              background: sub.startsWith("+")
+                ? isDark
+                  ? "rgba(22,163,74,0.1)"
+                  : "#dcfce7"
+                : "transparent",
+              padding: sub.startsWith("+") ? "2px 7px" : 0,
+              borderRadius: 20,
             }}
           >
-            Clear results
-          </button>
+            {sub}
+          </span>
         )}
       </div>
-
-      {/* Search controls */}
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr 2fr auto",
-          gap: 10,
-          alignItems: "end",
+          fontSize: 28,
+          fontWeight: 800,
+          color: textPrimary,
+          letterSpacing: -0.5,
+          marginBottom: 2,
         }}
       >
-        {/* Module selector */}
-        <div>
-          <label
-            style={{
-              display: "block",
-              fontSize: 11,
-              fontWeight: 600,
-              marginBottom: 5,
-              color: isDark ? "rgba(255,255,255,0.45)" : "#64748b",
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-            }}
-          >
-            Module *
-          </label>
-          <select
-            value={selectedModule}
-            onChange={(e) => {
-              setSelectedModule(e.target.value);
-              setSelectedSubModule("");
-              setResults([]);
-              setSearched(false);
-              setError("");
-            }}
-            style={inputStyle}
-          >
-            <option value="">Select Module</option>
-            {modules.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Sub-module selector */}
-        <div>
-          <label
-            style={{
-              display: "block",
-              fontSize: 11,
-              fontWeight: 600,
-              marginBottom: 5,
-              color: isDark ? "rgba(255,255,255,0.45)" : "#64748b",
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-            }}
-          >
-            Sub-module
-          </label>
-          <select
-            value={selectedSubModule}
-            onChange={(e) => {
-              setSelectedSubModule(e.target.value);
-              setResults([]);
-              setSearched(false);
-            }}
-            style={{ ...inputStyle, opacity: !selectedModule ? 0.5 : 1 }}
-            disabled={!selectedModule}
-          >
-            <option value="">All (module + sub-modules)</option>
-            {currentModule?.subModules?.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Search text */}
-        <div>
-          <label
-            style={{
-              display: "block",
-              fontSize: 11,
-              fontWeight: 600,
-              marginBottom: 5,
-              color: isDark ? "rgba(255,255,255,0.45)" : "#64748b",
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-            }}
-          >
-            Search term *
-          </label>
-          <input
-            type="text"
-            placeholder="Type to search records…"
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            style={inputStyle}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleSearch();
-            }}
-            onFocus={(e) =>
-              (e.target.style.borderColor = isDark ? "#4B9FFF" : "#2563eb")
-            }
-            onBlur={(e) =>
-              (e.target.style.borderColor = isDark
-                ? "rgba(255,255,255,0.12)"
-                : "#e2e8f0")
-            }
-          />
-        </div>
-
-        {/* Search button */}
-        <button
-          onClick={handleSearch}
-          disabled={loading}
-          style={{
-            padding: "9px 20px",
-            borderRadius: 8,
-            cursor: "pointer",
-            background: "linear-gradient(135deg,#2563eb,#1d4ed8)",
-            border: "none",
-            color: "#fff",
-            fontSize: 13,
-            fontWeight: 600,
-            boxShadow: "0 4px 12px rgba(37,99,235,0.3)",
-            opacity: loading ? 0.7 : 1,
-            whiteSpace: "nowrap",
-          }}
-        >
-          {loading ? "…" : "Search"}
-        </button>
+        {typeof value === "number" ? value.toLocaleString() : value}
       </div>
-
-      {/* Validation error */}
-      {error && (
-        <p
-          style={{
-            margin: "8px 0 0",
-            fontSize: 12,
-            color: isDark ? "#f87171" : "#dc2626",
-          }}
-        >
-          ⚠ {error}
-        </p>
-      )}
-
-      {/* Results */}
-      {searched && !loading && (
-        <div style={{ marginTop: 16 }}>
+      <div style={{ fontSize: 12, color: textSecondary, fontWeight: 500 }}>
+        {label}
+      </div>
+      {pct !== null && (
+        <div style={{ marginTop: 12 }}>
           <div
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              marginBottom: 10,
-              paddingBottom: 8,
-              borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.07)" : "#f1f5f9"}`,
+              height: 4,
+              borderRadius: 2,
+              background: isDark ? "rgba(255,255,255,0.08)" : "#f1f5f9",
+              overflow: "hidden",
             }}
           >
-            <span
-              style={{
-                fontSize: 13,
-                fontWeight: 700,
-                color: isDark ? "#fff" : "#0f172a",
-              }}
-            >
-              Results
-            </span>
-            <span
-              style={{
-                padding: "2px 8px",
-                borderRadius: 20,
-                fontSize: 11,
-                fontWeight: 700,
-                background:
-                  results.length > 0
-                    ? isDark
-                      ? "rgba(34,197,94,0.15)"
-                      : "#f0fdf4"
-                    : isDark
-                      ? "rgba(255,255,255,0.06)"
-                      : "#f1f5f9",
-                color:
-                  results.length > 0
-                    ? isDark
-                      ? "#4ade80"
-                      : "#16a34a"
-                    : isDark
-                      ? "rgba(255,255,255,0.4)"
-                      : "#94a3b8",
-              }}
-            >
-              {results.length} found
-            </span>
-            <span
-              style={{
-                fontSize: 12,
-                color: isDark ? "rgba(255,255,255,0.35)" : "#94a3b8",
-              }}
-            >
-              in <strong>{currentModule?.name}</strong>
-              {selectedSubModule &&
-              currentModule?.subModules?.find((s) => s.id === selectedSubModule)
-                ? ` › ${currentModule.subModules.find((s) => s.id === selectedSubModule).name}`
-                : " (all sub-modules)"}
-            </span>
-          </div>
-
-          {results.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "24px 0" }}>
-              <div style={{ fontSize: 32, marginBottom: 8 }}>🔍</div>
-              <p
-                style={{
-                  fontSize: 13,
-                  color: isDark ? "rgba(255,255,255,0.35)" : "#94a3b8",
-                  margin: 0,
-                }}
-              >
-                No records match "<strong>{searchText}</strong>"
-              </p>
-            </div>
-          ) : (
             <div
               style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 8,
-                maxHeight: 360,
-                overflowY: "auto",
+                height: "100%",
+                width: `${pct}%`,
+                borderRadius: 2,
+                transition: "width 0.6s ease",
+                background:
+                  pct >= 100 ? "#ef4444" : pct >= 80 ? "#f59e0b" : accent,
               }}
-            >
-              {results.map((record) => {
-                // Recursively collect ALL field definitions from the module tree
-                function collectFields(subModules) {
-                  if (!subModules) return [];
-                  return subModules.flatMap((sm) => [
-                    ...(sm.fields ?? []),
-                    ...collectFields(sm.subModules),
-                  ]);
-                }
-                const allFields = [
-                  ...(currentModule?.fields ?? []),
-                  ...collectFields(currentModule?.subModules),
-                ];
-
-                // Format a value for display — skip file objects, booleans, etc.
-                function fmtVal(value) {
-                  if (value === null || value === undefined || value === "")
-                    return "—";
-                  if (typeof value === "boolean") return value ? "Yes" : "No";
-                  // File upload objects — show just the filename
-                  if (typeof value === "object" && value.name)
-                    return value.name;
-                  // Any other object — skip (don't show raw JSON)
-                  if (typeof value === "object") return null;
-                  return String(value);
-                }
-
-                const entries = Object.entries(record.values || {}).filter(
-                  ([, v]) => {
-                    // Skip file objects and null-ish values entirely
-                    if (v === null || v === undefined || v === "") return false;
-                    if (typeof v === "object" && !v.name) return false;
-                    return true;
-                  },
-                );
-
-                return (
-                  <div
-                    key={record.id}
-                    style={{
-                      padding: "12px 14px",
-                      borderRadius: 10,
-                      background: isDark ? "rgba(255,255,255,0.04)" : "#f8fafc",
-                      border: `1px solid ${isDark ? "rgba(255,255,255,0.08)" : "#e2e8f0"}`,
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns:
-                          "repeat(auto-fill, minmax(140px, 1fr))",
-                        gap: "6px 16px",
-                      }}
-                    >
-                      {entries.map(([fieldId, value]) => {
-                        const field = allFields.find((f) => f.id === fieldId);
-                        // Skip fields we can't label (unknown IDs with no match)
-                        if (!field) return null;
-                        const displayVal = fmtVal(value);
-                        if (displayVal === null) return null;
-                        return (
-                          <div key={fieldId}>
-                            <div
-                              style={{
-                                fontSize: 10,
-                                fontWeight: 700,
-                                textTransform: "uppercase",
-                                letterSpacing: "0.06em",
-                                color: isDark
-                                  ? "rgba(255,255,255,0.35)"
-                                  : "#94a3b8",
-                                marginBottom: 2,
-                              }}
-                            >
-                              {field.label}
-                            </div>
-                            <div
-                              style={{
-                                fontSize: 13,
-                                color: isDark ? "#fff" : "#0f172a",
-                                fontWeight: 500,
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              {displayVal}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    {/* Sub-module tag — show which sub-module this record belongs to */}
-                    {record.subModuleId &&
-                      (() => {
-                        function findSubModule(subModules, id) {
-                          for (const sm of subModules ?? []) {
-                            if (sm.id === id) return sm;
-                            const found = findSubModule(sm.subModules, id);
-                            if (found) return found;
-                          }
-                          return null;
-                        }
-                        const sm = findSubModule(
-                          currentModule?.subModules,
-                          record.subModuleId,
-                        );
-                        return sm ? (
-                          <div
-                            style={{
-                              marginTop: 8,
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 5,
-                            }}
-                          >
-                            <span
-                              style={{
-                                fontSize: 10,
-                                color: isDark
-                                  ? "rgba(165,180,252,0.5)"
-                                  : "#6366f1",
-                              }}
-                            >
-                              ◫
-                            </span>
-                            <span
-                              style={{
-                                fontSize: 10,
-                                fontWeight: 600,
-                                color: isDark
-                                  ? "rgba(165,180,252,0.6)"
-                                  : "#6366f1",
-                              }}
-                            >
-                              {sm.name}
-                            </span>
-                          </div>
-                        ) : null;
-                      })()}
-                  </div>
-                );
-              })}
-            </div>
-          )}
+            />
+          </div>
+          <div style={{ fontSize: 10, color: textSecondary, marginTop: 4 }}>
+            {value}
+            {max !== Infinity ? `/${max}` : ""} used
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-// ── Main Dashboard ────────────────────────────────────────────────────────────
-export default function Dashboard() {
-  const { isDark } = useTheme();
-  const { user, isAdmin } = useAuth();
-  const { modules, loadModules, filterRecords } = useData();
+// ─────────────────────────────────────────────────────────────────────────────
+// Bar chart — built from activity log data (no extra endpoint needed)
+// Groups the last 7 days of activity by day label
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildChartData(activityLogs) {
+  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  // Initialise last 7 days in order
+  const map = {};
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const label = days[d.getDay()];
+    map[label] = { label, created: 0, updated: 0, deleted: 0 };
+  }
+  activityLogs.forEach((log) => {
+    if (!log.timestamp) return;
+    const d = new Date(log.timestamp);
+    const diff = (Date.now() - d) / 86400000; // days ago
+    if (diff > 7) return;
+    const label = days[d.getDay()];
+    if (!map[label]) return;
+    const action = log.action?.toUpperCase();
+    if (action === "CREATE") map[label].created++;
+    else if (action === "UPDATE") map[label].updated++;
+    else if (action === "DELETE") map[label].deleted++;
+  });
+  return Object.values(map);
+}
+
+function BarChart({ data, isDark }) {
+  const canvasRef = useRef(null);
 
   useEffect(() => {
-    loadModules();
-  }, [loadModules]);
+    const canvas = canvasRef.current;
+    if (!canvas || !data.length) return;
+    const ctx = canvas.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.offsetWidth,
+      H = canvas.offsetHeight;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    ctx.scale(dpr, dpr);
 
-  const totalFields = modules.reduce((s, m) => s + (m.fields?.length ?? 0), 0);
-  const recentModules = [...modules].slice(0, 6);
+    const pad = { top: 12, right: 16, bottom: 28, left: 30 };
+    const chartW = W - pad.left - pad.right;
+    const chartH = H - pad.top - pad.bottom;
+    const maxVal = Math.max(...data.map((d) => d.created + d.updated), 1);
+    const barGroupW = chartW / data.length;
+    const barW = Math.min(barGroupW * 0.28, 13);
+    const gap = 3;
 
-  const textPrimary = isDark ? "#fff" : "#0f172a";
-  const textSecondary = isDark ? "rgba(255,255,255,0.45)" : "#64748b";
-  const cardBg = isDark ? "rgba(255,255,255,0.03)" : "#ffffff";
-  const cardBorder = isDark ? "rgba(255,255,255,0.07)" : "#e8f0fe";
-  const divider = isDark ? "rgba(255,255,255,0.07)" : "#f1f5f9";
+    const createColor = "#2563eb";
+    const updateColor = isDark
+      ? "rgba(37,99,235,0.38)"
+      : "rgba(37,99,235,0.22)";
+    const gridColor = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)";
+    const textColor = isDark ? "rgba(255,255,255,0.35)" : "#94a3b8";
 
-  const hour = new Date().getHours();
-  const greeting =
-    hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+    ctx.clearRect(0, 0, W, H);
+
+    for (let i = 0; i <= 4; i++) {
+      const y = pad.top + (chartH / 4) * i;
+      ctx.beginPath();
+      ctx.strokeStyle = gridColor;
+      ctx.lineWidth = 0.5;
+      ctx.setLineDash([4, 4]);
+      ctx.moveTo(pad.left, y);
+      ctx.lineTo(W - pad.right, y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = textColor;
+      ctx.font = "9px system-ui";
+      ctx.textAlign = "right";
+      ctx.fillText(Math.round(maxVal - (maxVal / 4) * i), pad.left - 4, y + 3);
+    }
+
+    data.forEach((d, i) => {
+      const x = pad.left + i * barGroupW + barGroupW / 2;
+      const cH = (d.created / maxVal) * chartH;
+      const uH = (d.updated / maxVal) * chartH;
+
+      ctx.fillStyle = updateColor;
+      rr(ctx, x - barW - gap / 2, pad.top + chartH - uH, barW, uH, 3);
+      ctx.fill();
+
+      ctx.fillStyle = createColor;
+      rr(ctx, x + gap / 2, pad.top + chartH - cH, barW, cH, 3);
+      ctx.fill();
+
+      ctx.fillStyle = textColor;
+      ctx.font = "10px system-ui";
+      ctx.textAlign = "center";
+      ctx.fillText(d.label, x, H - 6);
+    });
+
+    function rr(ctx, x, y, w, h, r) {
+      if (h <= 0) return;
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h);
+      ctx.lineTo(x, y + h);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+  }, [data, isDark]);
 
   return (
     <div
-      style={{ padding: "32px 40px", minHeight: "100%", color: textPrimary }}
+      style={{
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+      }}
     >
-      <style>{`
-        @keyframes fadeSlideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
-      `}</style>
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <canvas
+          ref={canvasRef}
+          style={{
+            width: "100%",
+            height: "100%",
+            display: "block",
+          }}
+        />
+      </div>
 
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          gap: 12,
+          marginTop: 8,
+        }}
+      >
+        {[
+          ["Created", "#2563eb"],
+          ["Updated", "rgba(37,99,235,0.45)"],
+        ].map(([l, c]) => (
+          <div
+            key={l}
+            style={{ display: "flex", alignItems: "center", gap: 4 }}
+          >
+            <div
+              style={{ width: 8, height: 8, borderRadius: 2, background: c }}
+            />
+            <span
+              style={{
+                fontSize: 10,
+                color: isDark ? "rgba(255,255,255,0.35)" : "#94a3b8",
+              }}
+            >
+              {l}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Donut chart
+// ─────────────────────────────────────────────────────────────────────────────
+
+function DonutChart({ value, max, label, color, isDark }) {
+  const pct = max === Infinity ? 0 : Math.min((value / max) * 100, 100);
+  const r = 36,
+    cx = 50,
+    cy = 50,
+    stroke = 8;
+  const circ = 2 * Math.PI * r;
+  const dash = `${(pct / 100) * circ} ${circ}`;
+  const textPrimary = isDark ? "#fff" : "#0f172a";
+  const textSecondary = isDark ? "rgba(255,255,255,0.4)" : "#64748b";
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 6,
+      }}
+    >
+      <svg viewBox="0 0 100 100" style={{ width: 90, height: 90 }}>
+        <circle
+          cx={cx}
+          cy={cy}
+          r={r}
+          fill="none"
+          stroke={isDark ? "rgba(255,255,255,0.07)" : "#f1f5f9"}
+          strokeWidth={stroke}
+        />
+        <circle
+          cx={cx}
+          cy={cy}
+          r={r}
+          fill="none"
+          stroke={color}
+          strokeWidth={stroke}
+          strokeDasharray={dash}
+          strokeDashoffset={circ * 0.25}
+          strokeLinecap="round"
+          style={{ transition: "stroke-dasharray 0.6s ease" }}
+        />
+        <text
+          x={cx}
+          y={cy - 4}
+          textAnchor="middle"
+          fontSize="14"
+          fontWeight="700"
+          fill={textPrimary}
+        >
+          {value}
+        </text>
+        <text
+          x={cx}
+          y={cy + 10}
+          textAnchor="middle"
+          fontSize="9"
+          fill={textSecondary}
+        >
+          {max !== Infinity ? `of ${max}` : "∞"}
+        </text>
+      </svg>
+      <span style={{ fontSize: 11, color: textSecondary, fontWeight: 600 }}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Activity row — maps real ActivityLogDTO shape from your backend
+// ─────────────────────────────────────────────────────────────────────────────
+
+const AVATAR_COLORS = [
+  "#2563eb",
+  "#7c3aed",
+  "#059669",
+  "#dc2626",
+  "#d97706",
+  "#0891b2",
+];
+function avatarColor(str = "") {
+  return AVATAR_COLORS[str.charCodeAt(0) % AVATAR_COLORS.length];
+}
+
+function fmtTime(ts) {
+  if (!ts) return "—";
+  const diff = (Date.now() - new Date(ts)) / 1000;
+  if (diff < 60) return "just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 172800) return "Yesterday";
+  return `${Math.floor(diff / 86400)} days ago`;
+}
+
+function ActivityRow({ log, isDark }) {
+  const cardBorder = isDark ? "rgba(255,255,255,0.08)" : "#f1f5f9";
+  const textPrimary = isDark ? "#fff" : "#0f172a";
+  const textSecondary = isDark ? "rgba(255,255,255,0.45)" : "#64748b";
+  const actionCfg = {
+    CREATE: {
+      bg: isDark ? "rgba(22,163,74,0.12)" : "#dcfce7",
+      color: isDark ? "#4ade80" : "#15803d",
+    },
+    UPDATE: {
+      bg: isDark ? "rgba(37,99,235,0.12)" : "#dbeafe",
+      color: isDark ? "#60a5fa" : "#1d4ed8",
+    },
+    DELETE: {
+      bg: isDark ? "rgba(239,68,68,0.12)" : "#fee2e2",
+      color: isDark ? "#f87171" : "#dc2626",
+    },
+    RESTORE: {
+      bg: isDark ? "rgba(124,58,237,0.12)" : "#ede9fe",
+      color: isDark ? "#a78bfa" : "#6d28d9",
+    },
+  }[log.action] ?? { bg: "rgba(100,116,139,0.1)", color: "#64748b" };
+
+  // your ActivityLogDTO has: userEmail, userName, userRole, action,
+  // entityType, entityId, entityName, details, timestamp
+  const displayName = log.userName || log.userEmail?.split("@")[0] || "Unknown";
+  const initials = displayName
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        padding: "10px 14px",
+        borderBottom: `1px solid ${cardBorder}`,
+      }}
+    >
+      <div
+        style={{
+          width: 30,
+          height: 30,
+          borderRadius: "50%",
+          flexShrink: 0,
+          background: avatarColor(log.userEmail ?? ""),
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 11,
+          fontWeight: 700,
+          color: "#fff",
+        }}
+      >
+        {initials}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          style={{
+            fontSize: 13,
+            color: textPrimary,
+            fontWeight: 500,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          <span style={{ fontWeight: 700 }}>{displayName}</span>{" "}
+          <span style={{ color: textSecondary, fontWeight: 400 }}>
+            {log.action?.toLowerCase()}d
+          </span>{" "}
+          <span>{log.entityName ?? log.entityId ?? "—"}</span>
+        </div>
+        <div style={{ fontSize: 11, color: textSecondary, marginTop: 1 }}>
+          {log.entityType}
+        </div>
+      </div>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "flex-end",
+          gap: 4,
+          flexShrink: 0,
+        }}
+      >
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 700,
+            padding: "2px 7px",
+            borderRadius: 4,
+            background: actionCfg.bg,
+            color: actionCfg.color,
+          }}
+        >
+          {log.action}
+        </span>
+        <span style={{ fontSize: 10, color: textSecondary }}>
+          {fmtTime(log.timestamp)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// Blurred placeholders for STARTER
+function FakeActivityRows({ isDark }) {
+  const cardBorder = isDark ? "rgba(255,255,255,0.08)" : "#f1f5f9";
+  return (
+    <div>
+      {["PS", "RK", "AM", "PS"].map((initials, i) => (
+        <div
+          key={i}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            padding: "10px 14px",
+            borderBottom: `1px solid ${cardBorder}`,
+          }}
+        >
+          <div
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: "50%",
+              background: "#94a3b8",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 11,
+              fontWeight: 700,
+              color: "#fff",
+            }}
+          >
+            {initials}
+          </div>
+          <div style={{ flex: 1 }}>
+            <div
+              style={{
+                height: 13,
+                borderRadius: 4,
+                width: "60%",
+                background: isDark ? "rgba(255,255,255,0.1)" : "#e2e8f0",
+              }}
+            />
+            <div
+              style={{
+                height: 10,
+                borderRadius: 4,
+                width: "30%",
+                marginTop: 4,
+                background: isDark ? "rgba(255,255,255,0.06)" : "#f1f5f9",
+              }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function FakeBarChart({ isDark }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "flex-end",
+        gap: 8,
+        height: 80,
+        padding: "0 8px",
+      }}
+    >
+      {[40, 65, 30, 80, 55, 25, 70].map((h, i) => (
+        <div
+          key={i}
+          style={{
+            flex: 1,
+            height: `${h}%`,
+            background: isDark ? "rgba(37,99,235,0.3)" : "#bfdbfe",
+            borderRadius: "3px 3px 0 0",
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Module row
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ModuleRow({ mod, recordCount, max, isDark, navigate }) {
+  const cardBorder = isDark ? "rgba(255,255,255,0.08)" : "#f1f5f9";
+  const textPrimary = isDark ? "#fff" : "#0f172a";
+  const textSecondary = isDark ? "rgba(255,255,255,0.45)" : "#64748b";
+  const pct = max !== Infinity ? Math.min((recordCount / max) * 100, 100) : 0;
+
+  return (
+    <div
+      onClick={() => navigate(`/modules/${mod.id}`)}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 14,
+        padding: "12px 14px",
+        borderBottom: `1px solid ${cardBorder}`,
+        cursor: "pointer",
+        transition: "background 0.15s",
+      }}
+      onMouseEnter={(e) =>
+        (e.currentTarget.style.background = isDark
+          ? "rgba(255,255,255,0.03)"
+          : "#f8fafc")
+      }
+      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+    >
+      <div
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: 9,
+          flexShrink: 0,
+          background: isDark ? "rgba(37,99,235,0.12)" : "#dbeafe",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 16,
+        }}
+      >
+        ⊞
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: textPrimary }}>
+          {mod.name}
+        </div>
+        <div style={{ fontSize: 11, color: textSecondary, marginTop: 1 }}>
+          {mod.fields?.length ?? 0} fields
+        </div>
+        {max !== Infinity && (
+          <div
+            style={{
+              marginTop: 6,
+              height: 3,
+              borderRadius: 2,
+              overflow: "hidden",
+              background: isDark ? "rgba(255,255,255,0.08)" : "#f1f5f9",
+            }}
+          >
+            <div
+              style={{
+                height: "100%",
+                width: `${pct}%`,
+                borderRadius: 2,
+                background: pct >= 90 ? "#ef4444" : "#2563eb",
+                transition: "width 0.5s ease",
+              }}
+            />
+          </div>
+        )}
+      </div>
+      <div style={{ textAlign: "right", flexShrink: 0 }}>
+        <div style={{ fontSize: 15, fontWeight: 800, color: textPrimary }}>
+          {recordCount.toLocaleString()}
+        </div>
+        <div style={{ fontSize: 10, color: textSecondary }}>records</div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Quick action
+// ─────────────────────────────────────────────────────────────────────────────
+
+function QuickAction({ icon, label, sublabel, onClick, locked, isDark }) {
+  const cardBg = isDark ? "rgba(255,255,255,0.04)" : "#fff";
+  const cardBorder = isDark ? "rgba(255,255,255,0.1)" : "#e2e8f0";
+  const textPrimary = isDark ? "#fff" : "#0f172a";
+  const textSecondary = isDark ? "rgba(255,255,255,0.45)" : "#64748b";
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        padding: "14px 16px",
+        borderRadius: 12,
+        cursor: "pointer",
+        background: cardBg,
+        border: `1px solid ${cardBorder}`,
+        textAlign: "left",
+        width: "100%",
+        opacity: locked ? 0.65 : 1,
+        boxShadow: isDark ? "none" : "0 1px 4px rgba(0,0,0,0.04)",
+      }}
+      onMouseEnter={(e) => {
+        if (!locked)
+          e.currentTarget.style.borderColor = isDark
+            ? "rgba(255,255,255,0.2)"
+            : "#cbd5e1";
+      }}
+      onMouseLeave={(e) =>
+        (e.currentTarget.style.borderColor = isDark
+          ? "rgba(255,255,255,0.1)"
+          : "#e2e8f0")
+      }
+    >
+      <span style={{ fontSize: 20 }}>{icon}</span>
+      <div style={{ flex: 1 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: textPrimary }}>
+            {label}
+          </span>
+          {locked && <ProBadge isDark={isDark} />}
+        </div>
+        {sublabel && (
+          <div style={{ fontSize: 11, color: textSecondary, marginTop: 1 }}>
+            {sublabel}
+          </div>
+        )}
+      </div>
+      <span style={{ fontSize: 16, color: textSecondary }}>→</span>
+    </button>
+  );
+}
+
+function UsageSummary({
+  totalRecords,
+  totalModules,
+  totalUsers,
+  limits,
+  isDark,
+}) {
+  const cardBg = isDark ? "rgba(255,255,255,0.04)" : "#fff";
+  const cardBorder = isDark ? "rgba(255,255,255,0.1)" : "#e2e8f0";
+  const textSecondary = isDark ? "rgba(255,255,255,0.45)" : "#64748b";
+  return (
+    <div
+      style={{
+        background: cardBg,
+        border: `1px solid ${cardBorder}`,
+        borderRadius: 14,
+        padding: "20px 22px",
+        boxShadow: isDark ? "none" : "0 1px 6px rgba(0,0,0,0.04)",
+      }}
+    >
+      <div
+        style={{
+          fontSize: 11,
+          fontWeight: 700,
+          color: textSecondary,
+          textTransform: "uppercase",
+          letterSpacing: "0.06em",
+          marginBottom: 20,
+        }}
+      >
+        Plan usage
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-around" }}>
+        <DonutChart
+          value={totalRecords}
+          max={limits.maxRecords}
+          label="Records"
+          color="#2563eb"
+          isDark={isDark}
+        />
+        <DonutChart
+          value={totalModules}
+          max={limits.maxModules}
+          label="Modules"
+          color="#16a34a"
+          isDark={isDark}
+        />
+        <DonutChart
+          value={totalUsers}
+          max={limits.maxUsers}
+          label="Members"
+          color="#7c3aed"
+          isDark={isDark}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main Dashboard
+// ─────────────────────────────────────────────────────────────────────────────
+
+export default function Dashboard() {
+  const navigate = useNavigate();
+  const { user, isAdmin, isStaff } = useAuth();
+  const { isDark } = useTheme();
+  const limits = getPlanLimits(user?.plan ?? "STARTER");
+
+  // ── State ──────────────────────────────────────────────────────────────────
+  const [modules, setModules] = useState([]);
+  const [recordCounts, setRecordCounts] = useState({}); // { moduleId: count }
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [users, setUsers] = useState([]);
+  const [activity, setActivity] = useState([]);
+  const [chartData, setChartData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // ── Load ───────────────────────────────────────────────────────────────────
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      // 1. Modules — always needed
+      const mods = await moduleApi.getAll();
+      setModules(mods);
+
+      // 2. Record counts per module — fetch in parallel, sum for total
+      const counts = {};
+      let total = 0;
+      await Promise.all(
+        mods.map(async (m) => {
+          try {
+            const records = await recordApi.getByModule(m.id);
+            counts[m.id] = records.length;
+            total += records.length;
+          } catch {
+            counts[m.id] = 0;
+          }
+        }),
+      );
+      setRecordCounts(counts);
+      setTotalRecords(total);
+
+      // 3. Users — always needed
+      const u = await userApi.getAll();
+      setUsers(u);
+
+      // 4. Activity — only fetch if plan allows; used for both
+      //    the activity feed AND the bar chart
+      if (limits.activityLog) {
+        const logs = await activityApi.getRecent(200);
+        setActivity(logs);
+        setChartData(buildChartData(logs));
+      }
+    } catch (e) {
+      console.error("Dashboard load error:", e);
+      setError("Some data failed to load.");
+    } finally {
+      setLoading(false);
+    }
+  }, [limits.activityLog]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // ── Derived stats ──────────────────────────────────────────────────────────
+  const totalModules = modules.length;
+  const totalUsers = users.length;
+
+  // Top 5 modules sorted by record count
+  const topModules = [...modules]
+    .sort((a, b) => (recordCounts[b.id] ?? 0) - (recordCounts[a.id] ?? 0))
+    .slice(0, 5);
+
+  // Recent 7 activity items for the feed
+  const recentActivity = activity.slice(0, 7);
+
+  // Count records created/updated this week from activity logs
+  const weekAgo = Date.now() - 7 * 86400000;
+  const recordsThisWeek = activity.filter(
+    (l) =>
+      l.action === "CREATE" &&
+      l.entityType === "RECORD" &&
+      new Date(l.timestamp) > weekAgo,
+  ).length;
+  const modulesThisWeek = activity.filter(
+    (l) =>
+      l.action === "CREATE" &&
+      l.entityType === "MODULE" &&
+      new Date(l.timestamp) > weekAgo,
+  ).length;
+
+  const atRecordLimit =
+    limits.maxRecords !== Infinity && totalRecords >= limits.maxRecords;
+
+  // ── Theme tokens ───────────────────────────────────────────────────────────
+  const textPrimary = isDark ? "#fff" : "#0f172a";
+  const textSecondary = isDark ? "rgba(255,255,255,0.45)" : "#64748b";
+  const cardBg = isDark ? "rgba(255,255,255,0.04)" : "#fff";
+  const cardBorder = isDark ? "rgba(255,255,255,0.1)" : "#e2e8f0";
+
+  // ── Loading skeleton ───────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div
+        style={{
+          padding: "36px 40px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 20,
+        }}
+      >
+        <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}`}</style>
+        {[80, 180, 96, 96].map((h, i) => (
+          <div
+            key={i}
+            style={{
+              height: h,
+              borderRadius: 14,
+              animation: "pulse 1.5s ease-in-out infinite",
+              background: isDark ? "rgba(255,255,255,0.04)" : "#f1f5f9",
+            }}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  return (
+    <div
+      style={{
+        padding: "36px 40px",
+        minHeight: "100%",
+        display: "flex",
+        flexDirection: "column",
+        gap: 24,
+      }}
+    >
       {/* ── Header ── */}
       <div
         style={{
           display: "flex",
           alignItems: "flex-start",
           justifyContent: "space-between",
-          marginBottom: 32,
-          animation: "fadeSlideUp 0.4s ease both",
+          flexWrap: "wrap",
+          gap: 12,
         }}
       >
         <div>
@@ -935,411 +1195,389 @@ export default function Dashboard() {
               display: "flex",
               alignItems: "center",
               gap: 10,
-              marginBottom: 6,
+              marginBottom: 4,
             }}
           >
             <h1
               style={{
-                fontSize: 26,
-                fontWeight: 900,
-                margin: 0,
-                letterSpacing: -0.8,
+                fontSize: 24,
+                fontWeight: 800,
                 color: textPrimary,
+                margin: 0,
+                letterSpacing: -0.5,
               }}
             >
-              {greeting}, {user?.name?.split(" ")[0]}
+              Dashboard
             </h1>
-            <span style={{ fontSize: 24 }}>👋</span>
+            <PlanBadge plan={user?.plan} isDark={isDark} />
           </div>
-          <p
-            style={{
-              color: textSecondary,
-              fontSize: 13,
-              margin: 0,
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-            }}
-          >
-            <span
-              style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
-            >
-              <span
-                style={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: "50%",
-                  background: "#10b981",
-                  display: "inline-block",
-                  animation: "pulse 2s infinite",
-                }}
-              />
-              System live
-            </span>
-            <span
-              style={{ color: isDark ? "rgba(255,255,255,0.15)" : "#e2e8f0" }}
-            >
-              ·
-            </span>
-            <span>
-              {new Date().toLocaleDateString("en-IN", {
-                weekday: "long",
-                day: "numeric",
-                month: "long",
-              })}
-            </span>
+          <p style={{ fontSize: 13, color: textSecondary, margin: 0 }}>
+            Welcome back, {user?.name?.split(" ")[0] ?? "there"}
           </p>
         </div>
-        {isAdmin && (
-          <Link to="/modules/new" style={{ textDecoration: "none" }}>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={load}
+            style={{
+              padding: "8px 14px",
+              borderRadius: 8,
+              cursor: "pointer",
+              fontSize: 12,
+              fontWeight: 600,
+              background: isDark ? "rgba(255,255,255,0.06)" : "#f1f5f9",
+              border: isDark
+                ? "1px solid rgba(255,255,255,0.12)"
+                : "1.5px solid #e2e8f0",
+              color: isDark ? "rgba(255,255,255,0.7)" : "#475569",
+            }}
+          >
+            ↻ Refresh
+          </button>
+          {isAdmin && (
             <button
+              onClick={() => navigate("/modules/new")}
               style={{
-                padding: "10px 20px",
-                borderRadius: 10,
-                border: "none",
+                padding: "8px 16px",
+                borderRadius: 8,
                 cursor: "pointer",
-                background: "linear-gradient(135deg,#2563eb,#1d4ed8)",
+                fontSize: 12,
+                fontWeight: 600,
+                background: "linear-gradient(135deg,#16a34a,#15803d)",
+                border: "none",
                 color: "#fff",
-                fontSize: 13,
-                fontWeight: 700,
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                boxShadow: "0 4px 16px rgba(37,99,235,0.4)",
-                letterSpacing: 0.2,
+                boxShadow: "0 3px 10px rgba(22,163,74,0.3)",
               }}
             >
-              <span style={{ fontSize: 16, lineHeight: 1 }}>+</span>New Module
+              + New module
             </button>
-          </Link>
-        )}
+          )}
+        </div>
       </div>
 
-      {/* ── Stats row ── */}
+      {/* ── Partial error ── */}
+      {error && (
+        <div
+          style={{
+            padding: "10px 16px",
+            borderRadius: 10,
+            fontSize: 12,
+            color: isDark ? "#f87171" : "#dc2626",
+            background: isDark ? "rgba(239,68,68,0.07)" : "#fef2f2",
+            border: `1px solid ${isDark ? "rgba(239,68,68,0.2)" : "#fecaca"}`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <span>⚠️ {error}</span>
+          <button
+            onClick={load}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              fontSize: 11,
+              fontWeight: 600,
+              color: isDark ? "#f87171" : "#dc2626",
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* ── Record limit nudge ── */}
+      <UpgradeBanner
+        type="record"
+        count={totalRecords}
+        max={limits.maxRecords}
+        isDark={isDark}
+        navigate={navigate}
+      />
+
+      {/* ── Stat cards ── */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(4,1fr)",
+          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
           gap: 14,
-          marginBottom: 32,
         }}
       >
         <StatCard
+          label="Total records"
+          value={totalRecords}
+          sub={limits.activityLog ? `+${recordsThisWeek} this week` : undefined}
+          icon="📄"
+          accent="#2563eb"
+          max={limits.maxRecords}
+          isDark={isDark}
+        />
+        <StatCard
           label="Modules"
-          value={modules.length}
-          icon="📦"
-          color="emerald"
+          value={totalModules}
+          sub={limits.activityLog ? `+${modulesThisWeek} this week` : undefined}
+          icon="⊞"
+          accent="#16a34a"
+          max={limits.maxModules}
           isDark={isDark}
-          delay={0}
         />
         <StatCard
-          label="Total Fields"
-          value={totalFields}
-          icon="🔧"
-          color="blue"
+          label="Team members"
+          value={totalUsers}
+          icon="👥"
+          accent="#7c3aed"
+          max={limits.maxUsers}
           isDark={isDark}
-          delay={80}
         />
         <StatCard
-          label="Your Role"
-          value={user?.role}
-          icon="🛡️"
-          color="violet"
+          label="Recycle bin"
+          value={limits.recycleBin ? "On" : "Off"}
+          icon="🗑"
           isDark={isDark}
-          delay={160}
-        />
-        <StatCard
-          label="Status"
-          value="Live"
-          icon="⚡"
-          color="amber"
-          isDark={isDark}
-          delay={240}
         />
       </div>
 
-      {/* ── Global Search — extracted to own component ── */}
-      <GlobalSearch
-        modules={modules}
-        filterRecords={filterRecords}
-        isDark={isDark}
-      />
-
-      {/* ── Main content: modules grid + sidebar ── */}
+      {/* ── 2-col grid ── */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr 280px",
-          gap: 24,
+          gridTemplateColumns: "1fr 340px",
+          gap: 20,
           alignItems: "start",
         }}
       >
-        {/* Left: Modules */}
-        <div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: 16,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <h2
-                style={{
-                  fontSize: 16,
-                  fontWeight: 800,
-                  margin: 0,
-                  color: textPrimary,
-                  letterSpacing: -0.3,
-                }}
-              >
-                Modules
-              </h2>
-              <span
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  padding: "2px 8px",
-                  borderRadius: 99,
-                  background: isDark ? "rgba(59,130,246,0.15)" : "#dbeafe",
-                  color: isDark ? "#60a5fa" : "#1d4ed8",
-                }}
-              >
-                {modules.length}
-              </span>
-            </div>
-            <Link to="/modules" style={{ textDecoration: "none" }}>
-              <button
-                style={{
-                  padding: "6px 14px",
-                  borderRadius: 8,
-                  cursor: "pointer",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  background: isDark ? "rgba(255,255,255,0.05)" : "#f8fafc",
-                  border: isDark
-                    ? "1px solid rgba(255,255,255,0.1)"
-                    : "1px solid #e2e8f0",
-                  color: isDark ? "rgba(255,255,255,0.6)" : "#64748b",
-                }}
-              >
-                View all →
-              </button>
-            </Link>
-          </div>
-
-          {modules.length === 0 ? (
-            <div
-              style={{
-                textAlign: "center",
-                padding: "56px 20px",
-                background: cardBg,
-                border: `1.5px dashed ${isDark ? "rgba(255,255,255,0.1)" : "#cbd5e1"}`,
-                borderRadius: 16,
-              }}
-            >
-              <div style={{ fontSize: 44, marginBottom: 14 }}>📂</div>
-              <div
-                style={{
-                  fontWeight: 700,
-                  color: isDark ? "rgba(255,255,255,0.5)" : "#475569",
-                  marginBottom: 6,
-                }}
-              >
-                No modules yet
-              </div>
-              <p
-                style={{
-                  fontSize: 13,
-                  color: textSecondary,
-                  margin: "0 0 20px",
-                }}
-              >
-                Create your first module to start managing records
-              </p>
-              {isAdmin && (
-                <Link to="/modules/new" style={{ textDecoration: "none" }}>
-                  <button
-                    style={{
-                      padding: "10px 24px",
-                      borderRadius: 9,
-                      background: "linear-gradient(135deg,#2563eb,#1d4ed8)",
-                      border: "none",
-                      color: "#fff",
-                      fontWeight: 700,
-                      fontSize: 13,
-                      cursor: "pointer",
-                    }}
-                  >
-                    Create Module
-                  </button>
-                </Link>
-              )}
-            </div>
-          ) : (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(3,1fr)",
-                gap: 14,
-              }}
-            >
-              {recentModules.map((m, i) => (
-                <ModuleCard key={m.id} module={m} isDark={isDark} index={i} />
-              ))}
-            </div>
-          )}
-
-          {modules.length > 6 && (
-            <div style={{ textAlign: "center", marginTop: 16 }}>
-              <Link to="/modules" style={{ textDecoration: "none" }}>
-                <button
-                  style={{
-                    padding: "9px 22px",
-                    borderRadius: 9,
-                    cursor: "pointer",
-                    fontSize: 13,
-                    fontWeight: 600,
-                    background: isDark ? "rgba(255,255,255,0.05)" : "#f8fafc",
-                    border: isDark
-                      ? "1px solid rgba(255,255,255,0.1)"
-                      : "1px solid #e2e8f0",
-                    color: textSecondary,
-                  }}
-                >
-                  View {modules.length - 6} more modules →
-                </button>
-              </Link>
-            </div>
-          )}
-        </div>
-
-        {/* Right sidebar */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {/* Profile card */}
+        {/* LEFT */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          {/* Bar chart */}
           <div
             style={{
               background: cardBg,
               border: `1px solid ${cardBorder}`,
-              borderRadius: 16,
-              padding: "20px",
-              boxShadow: isDark ? "none" : "0 2px 12px rgba(0,0,0,0.04)",
+              borderRadius: 14,
+              padding: "20px 22px",
+              boxShadow: isDark ? "none" : "0 1px 6px rgba(0,0,0,0.04)",
             }}
           >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                marginBottom: 16,
-              }}
-            >
-              <div
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 12,
-                  background: "linear-gradient(135deg,#2563eb,#7c3aed)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 18,
-                  fontWeight: 800,
-                  color: "#fff",
-                  boxShadow: "0 4px 14px rgba(37,99,235,0.4)",
-                }}
+            <SectionHeader
+              isDark={isDark}
+              title="Record activity — last 7 days"
+              right={
+                !limits.dashboardCharts && (
+                  <ProBadge
+                    onClick={() => navigate("/pricing")}
+                    isDark={isDark}
+                  />
+                )
+              }
+            />
+            {limits.dashboardCharts ? (
+              chartData.length > 0 ? (
+                <div style={{ height: 160 }}>
+                  <BarChart data={chartData} isDark={isDark} />
+                </div>
+              ) : (
+                <div
+                  style={{
+                    height: 160,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <p style={{ fontSize: 13, color: textSecondary, margin: 0 }}>
+                    No activity in the last 7 days
+                  </p>
+                </div>
+              )
+            ) : (
+              <FeatureLock
+                icon="📊"
+                title="Charts require Professional plan"
+                description="See a 7-day breakdown of records created, updated, and deleted across all your modules."
+                isDark={isDark}
+                navigate={navigate}
+                minHeight={160}
               >
-                {user?.name?.[0]?.toUpperCase()}
+                <div style={{ height: 100 }}>
+                  <FakeBarChart isDark={isDark} />
+                </div>
+              </FeatureLock>
+            )}
+          </div>
+
+          {/* Activity feed */}
+          <div
+            style={{
+              background: cardBg,
+              border: `1px solid ${cardBorder}`,
+              borderRadius: 14,
+              overflow: "hidden",
+              boxShadow: isDark ? "none" : "0 1px 6px rgba(0,0,0,0.04)",
+            }}
+          >
+            <div style={{ padding: "20px 22px 0" }}>
+              <SectionHeader
+                isDark={isDark}
+                title="Recent activity"
+                right={
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 8 }}
+                  >
+                    {!limits.activityLog && (
+                      <ProBadge
+                        onClick={() => navigate("/pricing")}
+                        isDark={isDark}
+                      />
+                    )}
+                    {limits.activityLog && (
+                      <button
+                        onClick={() => navigate("/activity")}
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: isDark ? "#60a5fa" : "#2563eb",
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          padding: 0,
+                        }}
+                      >
+                        View all →
+                      </button>
+                    )}
+                  </div>
+                }
+              />
+            </div>
+            {limits.activityLog ? (
+              recentActivity.length > 0 ? (
+                <div>
+                  {recentActivity.map((log) => (
+                    <ActivityRow key={log.id} log={log} isDark={isDark} />
+                  ))}
+                </div>
+              ) : (
+                <div style={{ padding: "32px 22px", textAlign: "center" }}>
+                  <p style={{ fontSize: 13, color: textSecondary, margin: 0 }}>
+                    No activity recorded yet
+                  </p>
+                </div>
+              )
+            ) : (
+              <div style={{ padding: "0 22px 22px" }}>
+                <FeatureLock
+                  icon="📋"
+                  title="Activity log requires Professional plan"
+                  description="Track every create, edit, and delete action across your workspace — who did what and when."
+                  isDark={isDark}
+                  navigate={navigate}
+                  minHeight={200}
+                >
+                  <FakeActivityRows isDark={isDark} />
+                </FeatureLock>
               </div>
+            )}
+          </div>
+        </div>
+
+        {/* RIGHT */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          {/* Plan usage donuts */}
+          <UsageSummary
+            totalRecords={totalRecords}
+            totalModules={totalModules}
+            totalUsers={totalUsers}
+            limits={limits}
+            isDark={isDark}
+          />
+
+          {/* Top modules */}
+          <div
+            style={{
+              background: cardBg,
+              border: `1px solid ${cardBorder}`,
+              borderRadius: 14,
+              overflow: "hidden",
+              boxShadow: isDark ? "none" : "0 1px 6px rgba(0,0,0,0.04)",
+            }}
+          >
+            <div style={{ padding: "20px 22px 0" }}>
+              <SectionHeader
+                isDark={isDark}
+                title="Your modules"
+                right={
+                  <button
+                    onClick={() => navigate("/modules")}
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: isDark ? "#60a5fa" : "#2563eb",
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      padding: 0,
+                    }}
+                  >
+                    View all →
+                  </button>
+                }
+              />
+            </div>
+            {topModules.length > 0 ? (
               <div>
-                <div
-                  style={{ fontWeight: 700, fontSize: 14, color: textPrimary }}
-                >
-                  {user?.name}
-                </div>
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: textSecondary,
-                    marginTop: 2,
-                    textTransform: "capitalize",
-                  }}
-                >
-                  {user?.role?.toLowerCase()}
-                </div>
+                {topModules.map((mod) => (
+                  <ModuleRow
+                    key={mod.id}
+                    mod={mod}
+                    recordCount={recordCounts[mod.id] ?? 0}
+                    max={limits.maxRecords}
+                    isDark={isDark}
+                    navigate={navigate}
+                  />
+                ))}
               </div>
-            </div>
-            <div
-              style={{
-                borderTop: `1px solid ${divider}`,
-                paddingTop: 14,
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 10,
-              }}
-            >
-              <div
-                style={{
-                  textAlign: "center",
-                  padding: "10px 8px",
-                  borderRadius: 10,
-                  background: isDark ? "rgba(255,255,255,0.04)" : "#f8fafc",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 20,
-                    fontWeight: 900,
-                    color: isDark ? "#60a5fa" : "#1d4ed8",
-                  }}
-                >
-                  {modules.length}
-                </div>
-                <div
-                  style={{
-                    fontSize: 10,
-                    color: textSecondary,
-                    fontWeight: 600,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.06em",
-                    marginTop: 2,
-                  }}
-                >
-                  Modules
-                </div>
+            ) : (
+              <div style={{ padding: "32px 22px", textAlign: "center" }}>
+                <p style={{ fontSize: 13, color: textSecondary, margin: 0 }}>
+                  No modules yet
+                </p>
+                {isAdmin && (
+                  <button
+                    onClick={() => navigate("/modules/new")}
+                    style={{
+                      marginTop: 12,
+                      padding: "7px 16px",
+                      borderRadius: 8,
+                      cursor: "pointer",
+                      background: "linear-gradient(135deg,#16a34a,#15803d)",
+                      border: "none",
+                      color: "#fff",
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}
+                  >
+                    + Create your first module
+                  </button>
+                )}
               </div>
-              <div
-                style={{
-                  textAlign: "center",
-                  padding: "10px 8px",
-                  borderRadius: 10,
-                  background: isDark ? "rgba(255,255,255,0.04)" : "#f8fafc",
-                }}
-              >
+            )}
+            {limits.maxModules !== Infinity &&
+              totalModules >= limits.maxModules * 0.8 && (
                 <div
                   style={{
-                    fontSize: 20,
-                    fontWeight: 900,
-                    color: isDark ? "#34d399" : "#065f46",
+                    padding: "10px 14px",
+                    borderTop: `1px solid ${cardBorder}`,
                   }}
                 >
-                  {totalFields}
+                  <UpgradeBanner
+                    type="module"
+                    count={totalModules}
+                    max={limits.maxModules}
+                    isDark={isDark}
+                    navigate={navigate}
+                  />
                 </div>
-                <div
-                  style={{
-                    fontSize: 10,
-                    color: textSecondary,
-                    fontWeight: 600,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.06em",
-                    marginTop: 2,
-                  }}
-                >
-                  Fields
-                </div>
-              </div>
-            </div>
+              )}
           </div>
 
           {/* Quick actions */}
@@ -1347,113 +1585,151 @@ export default function Dashboard() {
             style={{
               background: cardBg,
               border: `1px solid ${cardBorder}`,
-              borderRadius: 16,
-              padding: "18px 20px",
-              boxShadow: isDark ? "none" : "0 2px 12px rgba(0,0,0,0.04)",
+              borderRadius: 14,
+              padding: "20px 22px",
+              boxShadow: isDark ? "none" : "0 1px 6px rgba(0,0,0,0.04)",
             }}
           >
-            <h3
-              style={{
-                fontSize: 12,
-                fontWeight: 800,
-                color: textSecondary,
-                margin: "0 0 12px",
-                textTransform: "uppercase",
-                letterSpacing: "0.08em",
-              }}
-            >
-              Quick Actions
-            </h3>
+            <SectionHeader isDark={isDark} title="Quick actions" />
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <QuickAction
-                to="/modules"
-                icon="📋"
-                label="All Modules"
-                desc="Browse every module"
-                color="blue"
-                isDark={isDark}
-              />
               {isAdmin && (
                 <QuickAction
-                  to="/modules/new"
-                  icon="✨"
-                  label="New Module"
-                  desc="Create a module"
-                  color="green"
+                  icon="⊞"
+                  label={
+                    atRecordLimit ? "Upgrade for more modules" : "New module"
+                  }
+                  sublabel={
+                    atRecordLimit
+                      ? "You've reached your plan limit"
+                      : "Define fields and structure"
+                  }
+                  onClick={() =>
+                    navigate(atRecordLimit ? "/pricing" : "/modules/new")
+                  }
+                  isDark={isDark}
+                />
+              )}
+              {isStaff && (
+                <QuickAction
+                  icon="📄"
+                  label="Browse modules"
+                  sublabel="View and manage records"
+                  onClick={() => navigate("/modules")}
+                  isDark={isDark}
+                />
+              )}
+              <QuickAction
+                icon="📋"
+                label="Activity log"
+                sublabel={
+                  limits.activityLog
+                    ? "See all recent changes"
+                    : "Track actions across your workspace"
+                }
+                onClick={() =>
+                  navigate(limits.activityLog ? "/activity" : "/pricing")
+                }
+                locked={!limits.activityLog}
+                isDark={isDark}
+              />
+              {limits.recycleBin && (
+                <QuickAction
+                  icon="🗑"
+                  label="Recycle bin"
+                  sublabel="Restore deleted records"
+                  onClick={() => navigate("/recycle-bin")}
                   isDark={isDark}
                 />
               )}
               {isAdmin && (
                 <QuickAction
-                  to="/users"
+                  icon="↓"
+                  label="Export data"
+                  sublabel={
+                    limits.dashboardExport
+                      ? "Download records as CSV/PDF"
+                      : "Export all your records"
+                  }
+                  onClick={() =>
+                    navigate(limits.dashboardExport ? "/export" : "/pricing")
+                  }
+                  locked={!limits.dashboardExport}
+                  isDark={isDark}
+                />
+              )}
+              {isAdmin && (
+                <QuickAction
                   icon="👥"
-                  label="Users"
-                  desc="Manage team members"
-                  color="violet"
+                  label="Invite team member"
+                  sublabel={`${totalUsers}/${limits.maxUsers === Infinity ? "∞" : limits.maxUsers} seats used`}
+                  onClick={() =>
+                    navigate(
+                      totalUsers >= limits.maxUsers
+                        ? "/pricing"
+                        : "/settings/users",
+                    )
+                  }
+                  locked={
+                    limits.maxUsers !== Infinity &&
+                    totalUsers >= limits.maxUsers
+                  }
                   isDark={isDark}
                 />
               )}
             </div>
           </div>
 
-          {/* System info */}
-          <div
-            style={{
-              background: isDark ? "rgba(37,99,235,0.08)" : "#eff6ff",
-              border: `1px solid ${isDark ? "rgba(37,99,235,0.2)" : "#bfdbfe"}`,
-              borderRadius: 16,
-              padding: "16px 18px",
-            }}
-          >
+          {/* Upgrade CTA — STARTER only */}
+          {user?.plan?.toUpperCase() === "STARTER" && (
             <div
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                marginBottom: 10,
+                borderRadius: 14,
+                padding: "20px 22px",
+                background: isDark ? "rgba(37,99,235,0.08)" : "#eff6ff",
+                border: `1px solid ${isDark ? "rgba(37,99,235,0.2)" : "#bfdbfe"}`,
               }}
             >
-              <span style={{ fontSize: 14 }}>ℹ️</span>
-              <span
+              <div style={{ fontSize: 18, marginBottom: 8 }}>⭐</div>
+              <div
                 style={{
-                  fontSize: 12,
+                  fontSize: 13,
                   fontWeight: 700,
                   color: isDark ? "#60a5fa" : "#1d4ed8",
+                  marginBottom: 6,
                 }}
               >
-                System Info
-              </span>
-            </div>
-            {[
-              { label: "Version", value: "v1.0.0" },
-              { label: "Environment", value: "Production" },
-              { label: "Uptime", value: "99.9%" },
-            ].map(({ label, value }) => (
-              <div
-                key={label}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "6px 0",
-                  borderBottom: `1px solid ${isDark ? "rgba(255,255,255,0.05)" : "#e0effe"}`,
-                }}
-              >
-                <span style={{ fontSize: 11, color: textSecondary }}>
-                  {label}
-                </span>
-                <span
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: isDark ? "#93c5fd" : "#1d4ed8",
-                  }}
-                >
-                  {value}
-                </span>
+                Unlock the full workspace
               </div>
-            ))}
-          </div>
+              <p
+                style={{
+                  fontSize: 12,
+                  color: isDark ? "rgba(255,255,255,0.5)" : "#475569",
+                  margin: "0 0 14px",
+                  lineHeight: 1.6,
+                }}
+              >
+                Sub-modules, file uploads, 100K records, activity logs, PDF
+                export, and a 30-day recycle bin — all on Professional.
+              </p>
+              <button
+                onClick={() => navigate("/pricing")}
+                style={{
+                  width: "100%",
+                  padding: "9px",
+                  borderRadius: 9,
+                  cursor: "pointer",
+                  background: "linear-gradient(135deg,#2563eb,#1d4ed8)",
+                  border: "none",
+                  color: "#fff",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  boxShadow: "0 4px 14px rgba(37,99,235,0.35)",
+                }}
+              >
+                View Professional plan →
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

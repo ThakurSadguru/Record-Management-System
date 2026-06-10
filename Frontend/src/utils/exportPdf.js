@@ -45,20 +45,61 @@ export function exportRecordsToPdf({ moduleName, fields, records }) {
   });
 
   autoTable(doc, {
-    startY: 30,
-    columns,
-    body: rows,
-    styles: { fontSize: 9, cellPadding: 3, overflow: "linebreak" },
-    headStyles: {
-      fillColor: [37, 99, 235],
-      textColor: 255,
-      fontStyle: "bold",
-      fontSize: 9,
+  startY: 30,
+  columns,
+  body: rows,
+
+  theme: "grid",
+
+  styles: {
+    fontSize: 7,
+    cellPadding: 2,
+    overflow: "hidden",
+    valign: "middle",
+  },
+
+  headStyles: {
+    fillColor: [37, 99, 235],
+    textColor: 255,
+    fontStyle: "bold",
+    fontSize: 7,
+    halign: "center",
+  },
+
+  alternateRowStyles: {
+    fillColor: [248, 250, 252],
+  },
+
+  columnStyles: {
+    _idx: {
+      cellWidth: 8,
+      halign: "center",
     },
-    alternateRowStyles: { fillColor: [248, 250, 252] },
-    columnStyles: { _idx: { cellWidth: 10, halign: "center" } },
-    margin: { left: 14, right: 14 },
-  });
+
+    _createdAt: {
+      cellWidth: 18,
+    },
+  },
+
+  margin: {
+    left: 8,
+    right: 8,
+  },
+
+  tableWidth: "auto",
+
+  didParseCell: function (data) {
+    if (typeof data.cell.raw === "string") {
+
+      // limit long text
+      if (data.cell.raw.length > 20) {
+        data.cell.text = [
+          data.cell.raw.substring(0, 20) + "..."
+        ];
+      }
+    }
+  },
+});
 
   // ── Footer ──
   const pageCount = doc.getNumberOfPages();
