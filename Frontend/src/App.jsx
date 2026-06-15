@@ -17,6 +17,8 @@ import FeaturesPage from "./pages/FeaturesPage";
 import SolutionsPage from "./pages/SolutionsPage";
 import PricingPage from "./pages/PricingPage";
 import AboutPage from "./pages/AboutPage";
+import SuperAdminDashboard from "./pages/SuperAdminDashboard";
+import SuperAdminRoute from "./components/layout/SuperAdminRoute";
 
 export default function App() {
   return (
@@ -38,6 +40,16 @@ export default function App() {
                 </DataProvider>
               }
             >
+              <Route
+                path="/super-admin"
+                element={
+                  <SuperAdminRoute>
+                    <SuperAdminDashboard />
+                  </SuperAdminRoute>
+                }
+              >
+                <Route index element={<SuperAdminDashboard />} />
+              </Route>
               <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/modules" element={<ModuleList />} />

@@ -2,6 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
+
+
 @layer base {
   body { @apply bg-gray-50 text-gray-900 antialiased; }
 }
@@ -17,3 +19,5 @@
   .card         { @apply bg-white border border-gray-100 rounded-xl shadow-sm; }
   .badge        { @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium; }
 }
+
+

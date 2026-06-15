@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Navbar, BottomCTA } from "../components/SharedComponents";
 import { authApi } from "../api/authApi";
+import { paymentApi } from "../api/paymentApi";
 
 // ── Plan definitions ──────────────────────────────────────────────────────────
 const PLANS = [
@@ -24,7 +25,7 @@ const PLANS = [
     features: [
       "Up to 3 users",
       "5 custom modules",
-      "1,000 records",
+      "500 records",
       "Basic roles (Admin / Staff / Viewer)",
       "Email support",
     ],
@@ -161,7 +162,7 @@ function StrengthBar({ pw }) {
   );
 }
 
-// ── Field component ───────────────────────────────────────────────────────────
+// ── Field wrapper ─────────────────────────────────────────────────────────────
 function Field({ label, required, error, children, span }) {
   return (
     <div style={{ gridColumn: span === 2 ? "1/-1" : undefined }}>
@@ -195,7 +196,7 @@ function Field({ label, required, error, children, span }) {
   );
 }
 
-// ── Step indicator ────────────────────────────────────────────────────────────
+// ── Step bar ──────────────────────────────────────────────────────────────────
 function StepBar({ current, total, color }) {
   return (
     <div
@@ -235,7 +236,9 @@ function StepBar({ current, total, color }) {
 
 // ── Registration Modal ────────────────────────────────────────────────────────
 function RegistrationModal({ plan, yearly, onClose, onSuccess }) {
-  const totalSteps = plan.paid ? 3 : 2; // 1=org+admin, 2=members(+enterprise), 3=billing(paid only)
+  // Always 2 steps — Razorpay handles payment UI natively, no card form needed
+  const totalSteps = 2;
+
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [showPw, setShowPw] = useState(false);
@@ -251,15 +254,10 @@ function RegistrationModal({ plan, yearly, onClose, onSuccess }) {
     adminPhone: "",
     password: "",
     confirmPw: "",
-    // enterprise
+    // enterprise only
     companySize: "",
     deployment: "Cloud (SaaS)",
     requirements: "",
-    // billing
-    cardName: "",
-    cardNum: "",
-    expiry: "",
-    cvv: "",
   });
 
   function set(k, v) {
@@ -279,21 +277,11 @@ function RegistrationModal({ plan, yearly, onClose, onSuccess }) {
         e.confirmPw = "Passwords do not match";
     }
     if (step === 2) {
-      const invalidMember = members.find(
-        (m) => m.email && !/\S+@\S+\.\S+/.test(m.email),
-      );
-
-      if (invalidMember) {
+      const bad = members.find((m) => m.email && !/\S+@\S+\.\S+/.test(m.email));
+      if (bad) {
         alert("Please enter valid member email addresses.");
         return false;
       }
-    }
-    if (step === 3 && plan.paid) {
-      if (!form.cardName.trim()) e.cardName = "Cardholder name required";
-      if (form.cardNum.replace(/\s/g, "").length < 16)
-        e.cardNum = "Enter a valid 16-digit card number";
-      if (!form.expiry.trim()) e.expiry = "Required";
-      if (!form.cvv.trim() || form.cvv.length < 3) e.cvv = "Required";
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -309,53 +297,106 @@ function RegistrationModal({ plan, yearly, onClose, onSuccess }) {
   }
 
   async function submit() {
+    setLoading(true);
     try {
-      setLoading(true);
-
-      const payload = {
-        plan: plan.tier, // STARTER | PROFESSIONAL | ENTERPRISE
+      const basePayload = {
+        plan: plan.tier,
         yearly,
-
         orgName: form.orgName,
         industry: form.industry,
         orgSize: form.orgSize,
-
         adminName: form.adminName,
         adminEmail: form.adminEmail,
         adminPhone: form.adminPhone,
         password: form.password,
-
         members: members
           .filter((m) => m.email.trim())
           .map((m) => ({
             email: m.email,
             role: m.role.toUpperCase(),
           })),
-
+        // enterprise extras
         companySize: form.companySize,
         deployment: form.deployment,
         requirements: form.requirements,
       };
 
-      const response = await authApi.registerWithPlan(payload);
+      if (plan.paid) {
+        // ── 1. Register account (returns JWT) ────────────────────────────────
+        const regRes = await authApi.registerWithPlan(basePayload);
+        const { token } = regRes.data;
+        localStorage.setItem("jwt_token", token);
 
-      console.log(response.data);
+        // ── 2. Create Razorpay order on backend ───────────────────────────────
+        const orderRes = await paymentApi.createOrder(plan.tier, yearly);
+        const { orderId, amount, currency, keyId } = orderRes.data;
 
-      onSuccess({
-        plan,
-        form,
-        members,
-        yearly,
-      });
-    } catch (error) {
-      console.error(error);
+        // ── 3. Open Razorpay checkout (Razorpay provides the payment UI) ──────
+        const rzpOptions = {
+          key: keyId,
+          amount,
+          currency,
+          name: "RMS",
+          description: `${plan.name} Plan — ${yearly ? "Annual" : "Monthly"}`,
+          order_id: orderId,
+          prefill: {
+            name: form.adminName,
+            email: form.adminEmail,
+            contact: form.adminPhone,
+          },
+          theme: { color: "#2563eb" },
 
+          handler: async function (response) {
+            try {
+              // ── 4. Verify payment signature on backend ────────────────────
+              await paymentApi.verify(
+                response.razorpay_order_id,
+                response.razorpay_payment_id,
+                response.razorpay_signature,
+                plan.tier,
+                yearly,
+              );
+              setLoading(false);
+              onSuccess({ plan, form, members, yearly });
+            } catch {
+              setLoading(false);
+              alert("Payment verification failed. Please contact support.");
+            }
+          },
+
+          modal: {
+            ondismiss: function () {
+              // User closed Razorpay without paying — account was already
+              // created, so drop them to Starter rather than deleting it.
+              setLoading(false);
+              alert(
+                "Payment cancelled. Your account has been created on the Starter plan. You can upgrade anytime from the dashboard.",
+              );
+              onSuccess({
+                plan: PLANS.find((p) => p.id === "starter"),
+                form,
+                members,
+                yearly: false,
+              });
+            },
+          },
+        };
+
+        const rzp = new window.Razorpay(rzpOptions);
+        rzp.open();
+        // setLoading stays true until handler or ondismiss fires
+      } else {
+        // Free / Enterprise — no payment
+        await authApi.registerWithPlan(basePayload);
+        setLoading(false);
+        onSuccess({ plan, form, members, yearly });
+      }
+    } catch (err) {
+      setLoading(false);
       alert(
-        error?.response?.data?.message ||
+        err?.response?.data?.message ||
           "Registration failed. Please try again.",
       );
-    } finally {
-      setLoading(false);
     }
   }
 
@@ -377,7 +418,6 @@ function RegistrationModal({ plan, yearly, onClose, onSuccess }) {
       ? `${yearly ? plan.price.yearly : plan.price.monthly}/mo`
       : "Free forever";
 
-  // pill gradient per plan
   const pillBg = {
     starter: "rgba(100,116,139,0.2)",
     professional: "rgba(37,99,235,0.2)",
@@ -399,7 +439,6 @@ function RegistrationModal({ plan, yearly, onClose, onSuccess }) {
       ? "Tell us about your organisation"
       : "Create your account",
     2: "Invite team members",
-    3: "Payment details",
   };
   const stepSubtitles = {
     1: plan.enterprise
@@ -410,8 +449,13 @@ function RegistrationModal({ plan, yearly, onClose, onSuccess }) {
     2: plan.enterprise
       ? "No user limit — add as many as needed."
       : `${plan.name} supports up to ${plan.maxUsers} users including you.`,
-    3: "Your trial starts now. We'll only charge after 14 days.",
   };
+
+  const submitLabel = plan.enterprise
+    ? "Send Enquiry"
+    : plan.paid
+      ? "Continue to Payment →"
+      : "Create Free Account";
 
   return (
     <div
@@ -439,7 +483,8 @@ function RegistrationModal({ plan, yearly, onClose, onSuccess }) {
           border: `1px solid ${plan.color}44`,
           borderRadius: 20,
           padding: "28px 30px",
-          boxShadow: `0 60px 120px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.04)`,
+          boxShadow:
+            "0 60px 120px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.04)",
           position: "relative",
         }}
         onClick={(e) => e.stopPropagation()}
@@ -490,6 +535,19 @@ function RegistrationModal({ plan, yearly, onClose, onSuccess }) {
           >
             {plan.name} · {priceStr}
           </span>
+          {plan.paid && (
+            <span
+              style={{
+                fontSize: 11,
+                color: "rgba(255,255,255,0.35)",
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+              }}
+            >
+              🔒 Secured by Razorpay
+            </span>
+          )}
         </div>
 
         {/* Step bar */}
@@ -523,7 +581,7 @@ function RegistrationModal({ plan, yearly, onClose, onSuccess }) {
         {/* ── STEP 1: Org + Admin ── */}
         {step === 1 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {/* Org section */}
+            {/* Organisation */}
             <div>
               <div
                 style={{
@@ -590,7 +648,7 @@ function RegistrationModal({ plan, yearly, onClose, onSuccess }) {
               </div>
             </div>
 
-            {/* Admin section */}
+            {/* Admin account */}
             <div>
               <div
                 style={{
@@ -732,7 +790,7 @@ function RegistrationModal({ plan, yearly, onClose, onSuccess }) {
               </div>
             </div>
 
-            {/* Enterprise extra fields on step 1 */}
+            {/* Enterprise extras */}
             {plan.enterprise && (
               <div>
                 <div
@@ -851,7 +909,7 @@ function RegistrationModal({ plan, yearly, onClose, onSuccess }) {
               ))}
             </div>
 
-            {/* Slots info */}
+            {/* Slots counter */}
             <div
               style={{
                 display: "flex",
@@ -1018,7 +1076,76 @@ function RegistrationModal({ plan, yearly, onClose, onSuccess }) {
                 }}
               >
                 ⚠ You've reached the {plan.maxMembers}-member limit. You can add
-                more after upgrading your plan.
+                more after upgrading.
+              </div>
+            )}
+
+            {/* Payment notice for paid plan */}
+            {plan.paid && (
+              <div
+                style={{
+                  background: "rgba(37,99,235,0.08)",
+                  border: "1px solid rgba(37,99,235,0.2)",
+                  borderRadius: 10,
+                  padding: "12px 16px",
+                  marginBottom: 12,
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: "#60a5fa",
+                    marginBottom: 4,
+                  }}
+                >
+                  🔒 Secure payment via Razorpay
+                </div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "rgba(255,255,255,0.45)",
+                    lineHeight: 1.6,
+                  }}
+                >
+                  Clicking "{submitLabel}" will register your account, then open
+                  the Razorpay checkout to complete payment. Your 14-day free
+                  trial starts immediately — ₹0 charged today.
+                </div>
+                <div style={{ display: "flex", gap: 16, marginTop: 10 }}>
+                  {[
+                    ["Plan", plan.name],
+                    ["Billing", yearly ? "Annual (save 25%)" : "Monthly"],
+                    [
+                      "Price after trial",
+                      `${yearly ? plan.price.yearly : plan.price.monthly}/month`,
+                    ],
+                  ].map(([k, v]) => (
+                    <div key={k}>
+                      <div
+                        style={{
+                          fontSize: 10,
+                          color: "rgba(255,255,255,0.3)",
+                          fontWeight: 600,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.06em",
+                        }}
+                      >
+                        {k}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 700,
+                          color: "#fff",
+                          marginTop: 2,
+                        }}
+                      >
+                        {v}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -1039,194 +1166,7 @@ function RegistrationModal({ plan, yearly, onClose, onSuccess }) {
           </div>
         )}
 
-        {/* ── STEP 3: Billing (Professional only) ── */}
-        {step === 3 && plan.paid && (
-          <div>
-            {/* Trial badge */}
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                background: "rgba(16,185,129,0.1)",
-                border: "1px solid rgba(16,185,129,0.2)",
-                borderRadius: 99,
-                padding: "5px 14px",
-                fontSize: 12,
-                fontWeight: 600,
-                color: "#34d399",
-                marginBottom: 18,
-              }}
-            >
-              🔒 14-day free trial — ₹0 charged today
-            </div>
-
-            {/* Order summary */}
-            <div
-              style={{
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.08)",
-                borderRadius: 12,
-                padding: "14px 18px",
-                marginBottom: 20,
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 10,
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.1em",
-                  color: "rgba(255,255,255,0.3)",
-                  marginBottom: 12,
-                }}
-              >
-                Order summary
-              </div>
-              {[
-                ["Plan", "Professional"],
-                ["Billing cycle", yearly ? "Annual (save 25%)" : "Monthly"],
-                [
-                  "Price after trial",
-                  `${yearly ? plan.price.yearly : plan.price.monthly}/month`,
-                ],
-                [
-                  "Trial ends",
-                  new Date(Date.now() + 14 * 86400000).toLocaleDateString(
-                    "en-IN",
-                    { day: "numeric", month: "long", year: "numeric" },
-                  ),
-                ],
-              ].map(([k, v]) => (
-                <div
-                  key={k}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    fontSize: 13,
-                    padding: "5px 0",
-                    borderBottom: "1px solid rgba(255,255,255,0.05)",
-                  }}
-                >
-                  <span style={{ color: "rgba(255,255,255,0.4)" }}>{k}</span>
-                  <span style={{ fontWeight: 600, color: "#fff" }}>{v}</span>
-                </div>
-              ))}
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  fontSize: 15,
-                  paddingTop: 10,
-                  marginTop: 4,
-                }}
-              >
-                <span
-                  style={{ color: "rgba(255,255,255,0.5)", fontWeight: 600 }}
-                >
-                  Due today
-                </span>
-                <span style={{ fontWeight: 900, color: "#10b981" }}>₹0</span>
-              </div>
-            </div>
-
-            {/* Card fields */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 12,
-              }}
-            >
-              <Field
-                label="Cardholder name"
-                required
-                error={errors.cardName}
-                span={2}
-              >
-                <input
-                  style={IS}
-                  placeholder="Name on card"
-                  value={form.cardName}
-                  onChange={(e) => set("cardName", e.target.value)}
-                  onFocus={focusIn}
-                  onBlur={focusOut}
-                />
-              </Field>
-              <Field
-                label="Card number"
-                required
-                error={errors.cardNum}
-                span={2}
-              >
-                <input
-                  style={IS}
-                  placeholder="•••• •••• •••• ••••"
-                  maxLength={19}
-                  value={form.cardNum}
-                  onChange={(e) =>
-                    set(
-                      "cardNum",
-                      e.target.value
-                        .replace(/\D/g, "")
-                        .slice(0, 16)
-                        .replace(/(.{4})/g, "$1 ")
-                        .trim(),
-                    )
-                  }
-                  onFocus={focusIn}
-                  onBlur={focusOut}
-                />
-              </Field>
-              <Field label="Expiry" required error={errors.expiry}>
-                <input
-                  style={IS}
-                  placeholder="MM/YY"
-                  maxLength={5}
-                  value={form.expiry}
-                  onChange={(e) => {
-                    const d = e.target.value.replace(/\D/g, "").slice(0, 4);
-                    set(
-                      "expiry",
-                      d.length > 2 ? d.slice(0, 2) + "/" + d.slice(2) : d,
-                    );
-                  }}
-                  onFocus={focusIn}
-                  onBlur={focusOut}
-                />
-              </Field>
-              <Field label="CVV" required error={errors.cvv}>
-                <input
-                  type="password"
-                  style={IS}
-                  placeholder="•••"
-                  maxLength={4}
-                  value={form.cvv}
-                  onChange={(e) =>
-                    set("cvv", e.target.value.replace(/\D/g, ""))
-                  }
-                  onFocus={focusIn}
-                  onBlur={focusOut}
-                />
-              </Field>
-            </div>
-
-            <div
-              style={{
-                fontSize: 11,
-                color: "rgba(255,255,255,0.2)",
-                marginTop: 14,
-                lineHeight: 1.7,
-              }}
-            >
-              🔒 Payments are encrypted and processed securely. Your card
-              details are never stored on our servers. Cancel any time before
-              day 15 to avoid charges.
-            </div>
-          </div>
-        )}
-
-        {/* Navigation buttons */}
+        {/* Navigation */}
         <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
           {step > 1 && (
             <button
@@ -1263,9 +1203,9 @@ function RegistrationModal({ plan, yearly, onClose, onSuccess }) {
               border: "none",
               background: loading
                 ? "rgba(37,99,235,0.5)"
-                : step === totalSteps
-                  ? "linear-gradient(135deg,#16a34a,#15803d)"
-                  : plan.gradient,
+                : step < totalSteps
+                  ? plan.gradient
+                  : "linear-gradient(135deg,#16a34a,#15803d)",
               color: "#fff",
               fontWeight: 700,
               fontSize: 14,
@@ -1275,23 +1215,13 @@ function RegistrationModal({ plan, yearly, onClose, onSuccess }) {
             onMouseEnter={(e) => {
               if (!loading) e.currentTarget.style.opacity = "0.88";
             }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.opacity = "1";
-            }}
+            onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
           >
             {loading
-              ? "Creating account…"
+              ? "Please wait…"
               : step < totalSteps
-                ? step === 1
-                  ? "Continue →"
-                  : step === 2 && plan.paid
-                    ? "Continue to Payment →"
-                    : "Create Account →"
-                : plan.enterprise
-                  ? "Send Enquiry"
-                  : plan.paid
-                    ? "Start Free Trial"
-                    : "Create Free Account"}
+                ? "Continue →"
+                : submitLabel}
           </button>
         </div>
 
@@ -1322,7 +1252,7 @@ function RegistrationModal({ plan, yearly, onClose, onSuccess }) {
 }
 
 // ── Success Screen ────────────────────────────────────────────────────────────
-function SuccessScreen({ plan, form, members, yearly, onClose }) {
+function SuccessScreen({ plan, form, members, yearly }) {
   const navigate = useNavigate();
   const priceStr = plan.enterprise
     ? "Sales will contact you"
@@ -1366,7 +1296,6 @@ function SuccessScreen({ plan, form, members, yearly, onClose }) {
           textAlign: "center",
         }}
       >
-        {/* Success animation */}
         <div
           style={{
             width: 72,
@@ -1413,7 +1342,7 @@ function SuccessScreen({ plan, form, members, yearly, onClose }) {
           to verify your account.
         </p>
 
-        {/* Plan summary */}
+        {/* Account summary */}
         <div
           style={{
             background: "rgba(255,255,255,0.04)",
@@ -1573,7 +1502,7 @@ const TRUST = [
   [
     "🔒",
     "Secure payments",
-    "PCI-DSS compliant processing. Card data never stored on our servers.",
+    "PCI-DSS compliant processing via Razorpay. Card data never stored on our servers.",
   ],
   [
     "↩",
@@ -1587,7 +1516,6 @@ const TRUST = [
   ],
 ];
 
-// ── FAQ ───────────────────────────────────────────────────────────────────────
 const FAQS = [
   [
     "Can I switch plans later?",
@@ -1632,7 +1560,6 @@ export default function PricingPage() {
     >
       <Navbar navigate={navigate} active="pricing" />
 
-      {/* Modals */}
       {activePlan && !successData && (
         <RegistrationModal
           plan={PLANS.find((p) => p.id === activePlan)}
@@ -1641,9 +1568,7 @@ export default function PricingPage() {
           onSuccess={handleSuccess}
         />
       )}
-      {successData && (
-        <SuccessScreen {...successData} onClose={() => setSuccessData(null)} />
-      )}
+      {successData && <SuccessScreen {...successData} />}
 
       {/* ── Hero ── */}
       <div style={{ textAlign: "center", padding: "88px 48px 56px" }}>
@@ -1782,7 +1707,7 @@ export default function PricingPage() {
               transform: p.highlight ? "scale(1.04)" : "scale(1)",
               transition: "transform 0.2s, box-shadow 0.2s, border-color 0.2s",
               boxShadow: p.highlight
-                ? `0 20px 60px rgba(37,99,235,0.15)`
+                ? "0 20px 60px rgba(37,99,235,0.15)"
                 : "none",
             }}
             onMouseEnter={(e) => {
@@ -1819,7 +1744,6 @@ export default function PricingPage() {
               </div>
             )}
 
-            {/* Tier */}
             <div
               style={{
                 fontSize: 11,
@@ -1832,7 +1756,6 @@ export default function PricingPage() {
               {p.tier}
             </div>
 
-            {/* Price */}
             <div
               style={{
                 fontSize: 42,
@@ -1867,7 +1790,6 @@ export default function PricingPage() {
               )}
             </div>
 
-            {/* Annual savings */}
             {yearly && p.paid && (
               <div
                 style={{
@@ -1892,7 +1814,6 @@ export default function PricingPage() {
               {p.desc}
             </p>
 
-            {/* CTA */}
             <button
               onClick={() => setActivePlan(p.id)}
               style={{
@@ -1909,19 +1830,14 @@ export default function PricingPage() {
                 boxShadow: p.highlight
                   ? "0 4px 20px rgba(37,99,235,0.4)"
                   : "none",
-                transition: "opacity 0.15s, background 0.15s",
+                transition: "opacity 0.15s",
               }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.opacity = "0.88";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.opacity = "1";
-              }}
+              onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.88")}
+              onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
             >
               {p.cta}
             </button>
 
-            {/* Usage badges */}
             <div
               style={{
                 display: "flex",
@@ -1937,7 +1853,7 @@ export default function PricingPage() {
                     ? "25 users"
                     : "Unlimited users",
                 p.id === "starter"
-                  ? "1K records"
+                  ? "500 records"
                   : p.id === "professional"
                     ? "100K records"
                     : "∞ records",
@@ -1960,7 +1876,6 @@ export default function PricingPage() {
               ))}
             </div>
 
-            {/* Features */}
             <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
               {p.features.map((f) => (
                 <li
