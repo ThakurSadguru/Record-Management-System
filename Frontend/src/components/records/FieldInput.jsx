@@ -21,6 +21,19 @@ export default function FieldInput({ field, value, onChange, isDark = false }) {
       ? "rgba(255,255,255,0.12)"
       : "#e2e8f0");
 
+  // ── Dropdown style — critical for dark mode ──────────────────────────────
+  // Browser <select> / <option> ignore most CSS; colorScheme forces the
+  // native OS widget into dark mode so options don't show white-on-white.
+  const selectStyle = {
+    ...base,
+    cursor: "pointer",
+    // Forces the native dropdown list to render in dark mode on all browsers
+    colorScheme: isDark ? "dark" : "light",
+    // Explicit bg/color so Chromium-based browsers honour it on the closed pill
+    background: isDark ? "#1e293b" : "#ffffff",
+    color: isDark ? "#ffffff" : "#0f172a",
+  };
+
   switch (field.type) {
     case "text":
       return (
@@ -133,21 +146,40 @@ export default function FieldInput({ field, value, onChange, isDark = false }) {
 
     case "dropdown":
       return (
-        <select
-          id={id}
-          style={{ ...base, cursor: "pointer" }}
-          value={value ?? ""}
-          onChange={(e) => onChange(field.id, e.target.value)}
-          onFocus={focusIn}
-          onBlur={focusOut}
-        >
-          <option value="">Select…</option>
-          {(field.options ?? []).map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
-        </select>
+        <div style={{ position: "relative" }}>
+          <style>{`
+            /* Fix option backgrounds in dark mode across browsers */
+            #${id} option {
+              background: ${isDark ? "#1e293b" : "#ffffff"};
+              color: ${isDark ? "#ffffff" : "#0f172a"};
+              padding: 8px 12px;
+            }
+            #${id} option:checked,
+            #${id} option:hover {
+              background: ${isDark ? "#2563eb" : "#dbeafe"};
+              color: ${isDark ? "#ffffff" : "#1d4ed8"};
+            }
+            #${id}:focus {
+              border-color: ${isDark ? "#4B9FFF" : "#2563eb"};
+            }
+          `}</style>
+          <select
+            id={id}
+            style={selectStyle}
+            value={value ?? ""}
+            onChange={(e) => onChange(field.id, e.target.value)}
+            onFocus={focusIn}
+            onBlur={focusOut}
+          >
+            <option value="">Select…</option>
+            {(field.options ?? []).map((o) => (
+              <option key={o} value={o}>
+                {/* Strip surrounding quotes if accidentally saved with them */}
+                {o.replace(/^"|"$/g, "")}
+              </option>
+            ))}
+          </select>
+        </div>
       );
 
     case "file": {

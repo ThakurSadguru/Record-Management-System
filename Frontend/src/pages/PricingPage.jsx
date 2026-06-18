@@ -120,13 +120,26 @@ const IS = {
   outline: "none",
   transition: "border-color 0.15s, background 0.15s",
 };
+
+// Selects need a SOLID dark background + colorScheme so the native OS
+// dropdown list renders dark instead of white (which makes text invisible).
+const SS = {
+  ...IS,
+  background: "#0f1b30", // solid — semi-transparent breaks the native picker
+  colorScheme: "dark", // tells browser/OS to render option list in dark mode
+  cursor: "pointer",
+};
+
 function focusIn(e) {
   e.target.style.borderColor = "rgba(74,159,255,0.55)";
-  e.target.style.background = "rgba(255,255,255,0.08)";
+  // Selects keep solid bg; regular inputs use translucent
+  e.target.style.background =
+    e.target.tagName === "SELECT" ? "#162040" : "rgba(255,255,255,0.08)";
 }
 function focusOut(e) {
   e.target.style.borderColor = "rgba(255,255,255,0.12)";
-  e.target.style.background = "rgba(255,255,255,0.05)";
+  e.target.style.background =
+    e.target.tagName === "SELECT" ? "#0f1b30" : "rgba(255,255,255,0.05)";
 }
 
 // ── Password strength meter ───────────────────────────────────────────────────
@@ -473,6 +486,7 @@ function RegistrationModal({ plan, yearly, onClose, onSuccess }) {
       onClick={onClose}
     >
       <div
+        className="rzp-modal"
         style={{
           width: "100%",
           maxWidth: 560,
@@ -489,6 +503,20 @@ function RegistrationModal({ plan, yearly, onClose, onSuccess }) {
         }}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Dark mode option styles — colorScheme handles Chrome/Safari,
+            this <style> handles Firefox which supports option bg CSS */}
+        <style>{`
+          .rzp-modal option {
+            background: #0f1b30 !important;
+            color: #ffffff !important;
+          }
+          .rzp-modal option:checked,
+          .rzp-modal option:hover {
+            background: #1d4ed8 !important;
+            color: #ffffff !important;
+          }
+        `}</style>
+
         {/* Close */}
         <button
           onClick={onClose}
@@ -619,7 +647,7 @@ function RegistrationModal({ plan, yearly, onClose, onSuccess }) {
                 </Field>
                 <Field label="Industry">
                   <select
-                    style={{ ...IS, cursor: "pointer" }}
+                    style={SS}
                     value={form.industry}
                     onChange={(e) => set("industry", e.target.value)}
                     onFocus={focusIn}
@@ -633,7 +661,7 @@ function RegistrationModal({ plan, yearly, onClose, onSuccess }) {
                 </Field>
                 <Field label="Organisation size">
                   <select
-                    style={{ ...IS, cursor: "pointer" }}
+                    style={SS}
                     value={form.orgSize}
                     onChange={(e) => set("orgSize", e.target.value)}
                     onFocus={focusIn}
@@ -814,7 +842,7 @@ function RegistrationModal({ plan, yearly, onClose, onSuccess }) {
                 >
                   <Field label="Company headcount">
                     <select
-                      style={{ ...IS, cursor: "pointer" }}
+                      style={SS}
                       value={form.companySize}
                       onChange={(e) => set("companySize", e.target.value)}
                       onFocus={focusIn}
@@ -828,7 +856,7 @@ function RegistrationModal({ plan, yearly, onClose, onSuccess }) {
                   </Field>
                   <Field label="Preferred deployment">
                     <select
-                      style={{ ...IS, cursor: "pointer" }}
+                      style={SS}
                       value={form.deployment}
                       onChange={(e) => set("deployment", e.target.value)}
                       onFocus={focusIn}
@@ -992,7 +1020,7 @@ function RegistrationModal({ plan, yearly, onClose, onSuccess }) {
                     onBlur={focusOut}
                   />
                   <select
-                    style={{ ...IS, width: 110, flexShrink: 0 }}
+                    style={{ ...SS, width: 110, flexShrink: 0 }}
                     value={m.role}
                     onChange={(e) => updateMember(m.id, "role", e.target.value)}
                     onFocus={focusIn}
